@@ -1,0 +1,94 @@
+{
+  "name": "dsh-review",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness plugin: an opencode-style Review panel for the web GUI's right sidebar \u2014 uncommitted changes and per-conversation-round changes, each as a directory tree with +added/-removed counts, grand totals, and the selected file's unified diff in red/green",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "plugin",
+    "web-gui",
+    "review",
+    "diff",
+    "git",
+    "sidebar"
+  ],
+  "license": "MIT",
+  "author": "plae-tljg",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plae-tljg/dsh-review.git"
+  },
+  "homepage": "https://github.com/plae-tljg/dsh-review#readme",
+  "bugs": {
+    "url": "https://github.com/plae-tljg/dsh-review/issues"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./typert": {
+      "default": "./lib/typert.host.js"
+    },
+    "./src/*": "./src/*",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-api-remotes",
+        "dsh-better-sidebar"
+      ]
+    }
+  },
+  "files": [
+    "lib/index.js",
+    "lib/index.d.ts",
+    "lib/client.js",
+    "lib/client.js.map",
+    "lib/typert.host.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "docs"
+  ],
+  "scripts": {
+    "build": "node build/build.mjs",
+    "test": "node build/build.mjs && node --test \"tests/*.test.mjs\"",
+    "check": "npm run test"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-typert-protocol": "^0.1.5-rc.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-typert-protocol": {
+      "optional": true
+    }
+  }
+}

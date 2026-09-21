@@ -1,0 +1,506 @@
+/* The Review tab. Colour comes only from the theme's semantic aliases, so the
+   diff keeps its red/green in every theme, and the tab body takes the panel's
+   own ground rather than a raised layer of its own. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-base-14);
+}
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  flex: none;
+}
+
+.branch {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* ── source switch ──────────────────────────────────────────────────────── */
+
+.switch {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.switchButton {
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 2px 10px;
+  font: var(--dsw-font-xs-12);
+  font-weight: 500;
+}
+
+.switchButton:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.switchOn,
+.switchOn:hover {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── rounds ─────────────────────────────────────────────────────────────── */
+
+.turn {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 5px 10px;
+  font: inherit;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.turn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.turnName {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live {
+  flex: none;
+  color: var(--dsw-alias-state-business-primary);
+  font: var(--dsw-font-xs-12);
+}
+
+/* A round's files sit under its header; a hairline keeps the grouping legible
+   even when the tree is deep. */
+.roundFiles {
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.ahead,
+.behind {
+  margin-left: 6px;
+  font: var(--dsw-font-xs-12);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.totals {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  font: var(--dsw-font-xs-12);
+  flex: none;
+}
+
+.action {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font: inherit;
+}
+
+.action:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── split ──────────────────────────────────────────────────────────────── */
+
+.split {
+  display: grid;
+  /* The list is a fixed rail: a long path must not widen it and push the diff
+     out of the panel. */
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+@media (width <= 520px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 40%) minmax(0, 1fr);
+  }
+}
+
+.list {
+  overflow: auto;
+  border-right: 1px solid var(--dsw-alias-border-l2);
+  padding: 4px 6px 10px;
+  min-width: 0;
+}
+
+/* ── tree rows ──────────────────────────────────────────────────────────── */
+
+/* Both row kinds share one shape, following opencode's file tree: a 28px row
+   with a 6px radius, a chevron/icon column, a name that takes the slack, then
+   the change letter and the counts. The chevron column is always drawn (empty on
+   a file) so names at one depth line up, and every row highlights as a whole on
+   hover or while selected. */
+.row,
+.folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  text-align: left;
+  cursor: pointer;
+  padding: 0 8px;
+  font: inherit;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.row:hover,
+.folder:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.row[data-review-active='true'],
+.row[data-review-active='true']:hover {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The chevron column: a 16px glyph that points right when the folder is shut. */
+.chevron {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 120ms ease;
+}
+
+.chevron[data-expanded='true'] {
+  transform: rotate(0deg);
+}
+
+.chevron:not([data-expanded='true']) {
+  transform: rotate(-90deg);
+}
+
+/* The file/folder glyph column, sized to line names up across both row kinds. */
+.icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.folderName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.fileName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* How many files a folded folder holds, shown only while it is closed. */
+.folderCount {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The change letter, in a fixed 16px box so the column never jitters. */
+.change {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font: var(--dsw-font-xs-12);
+  font-weight: 600;
+  line-height: 1;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Git's own letters, in the theme's state colours: a deletion and an
+   untracked file must not read as the same kind of change. */
+.change[data-change='added'],
+.change[data-change='untracked'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.change[data-change='deleted'],
+.change[data-change='conflicted'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.change[data-change='renamed'],
+.change[data-change='copied'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.change[data-change='typechange'] {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.counts {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  font: var(--dsw-font-xs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.added {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.removed {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.binary {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.count {
+  margin: 6px 10px 2px;
+  font: var(--dsw-font-xs-12);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.filter {
+  margin: 2px 10px 6px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font: var(--dsw-font-xs-12);
+  cursor: pointer;
+}
+
+.filterOn {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── diff ───────────────────────────────────────────────────────────────── */
+
+.body {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.diffScroll {
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+  font: var(--dsw-font-markdown-code-block);
+}
+
+.diffHead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--dsw-alias-bg-layer-1);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.diffPath {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.renameFrom {
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.copy {
+  margin-left: auto;
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 1px 6px;
+  font: var(--dsw-font-xs-12);
+}
+
+.copy:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.hunk {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.hunkHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 10px;
+  background: var(--dsw-alias-markdown-code-block-banner);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.hunkCoordinates {
+  flex: none;
+}
+
+.hunkContext {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* One diff line: both gutters, the marker, then the text. The row is a grid so
+   the gutters stay aligned however long the text runs, and the text is the only
+   cell allowed to grow. */
+.line {
+  display: grid;
+  grid-template-columns: 3.5em 3.5em 1.2em minmax(0, 1fr);
+  align-items: baseline;
+  min-height: 20px;
+}
+
+.gutter {
+  text-align: right;
+  padding-right: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-12);
+  user-select: none;
+}
+
+.marker {
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
+}
+
+.text {
+  /* A diff is read by its indentation, so lines never wrap. */
+  white-space: pre;
+  padding-right: 12px;
+}
+
+.line[data-kind='add'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent);
+}
+
+.line[data-kind='add'] .marker,
+.line[data-kind='add'] .text {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.line[data-kind='del'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
+}
+
+.line[data-kind='del'] .marker,
+.line[data-kind='del'] .text {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* ── notices ────────────────────────────────────────────────────────────── */
+
+.notice {
+  padding: 12px 10px;
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.hint {
+  margin: 0;
+  padding: 5px 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-12);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: 1;
+  text-align: center;
+  padding: 24px;
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.emptyBody {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-12);
+}

@@ -1,0 +1,12 @@
+# The dsh-review bundle patch: the Review panel for the right sidebar.
+#
+# One dual-face row owns both halves: the Host mounts the read-only
+# `workspaceReview` Remote service (uncommitted status, counts, and diffs over
+# the git CLI), and the browser roster serves the `review` tab type, which
+# mounts its own Remote contribution.
+#
+# Install with `dsh plugin --profile web add <this package>`.
+
+- insert:
+    - id: review
+      name: 'dsh-review'
