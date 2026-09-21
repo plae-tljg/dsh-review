@@ -25,6 +25,7 @@ export const zh = {
   reload: '重新读取',
   expandAll: '展开全部',
   collapseAll: '收起全部',
+  'toggle.folderCounts': '显示或隐藏文件夹合计',
 
   'empty.title': '没有未提交的改动',
   'empty.description': '工作区和暂存区都是干净的。',
@@ -87,6 +88,7 @@ export const en = {
   reload: 'Reload',
   expandAll: 'Expand all',
   collapseAll: 'Collapse all',
+  'toggle.folderCounts': 'Show or hide folder totals',
 
   'empty.title': 'No uncommitted changes',
   'empty.description': 'The working tree and the index are both clean.',

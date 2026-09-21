@@ -130,6 +130,15 @@ function FileGlyph() {
   )
 }
 
+/** The sigma glyph on the folder-totals toggle. */
+function TotalsGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
+      <path d="M4 3h8M4 3l4 5-4 5h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 /**
  * One changed file.
  * @param {object} props - Row props.
@@ -169,7 +178,7 @@ function FileRow({ file, active, depth, t, onSelect }) {
  * @param {object} props - Node props.
  * @returns {import('react').ReactNode} The subtree.
  */
-function DirectoryRows({ node, depth, selected, collapsed, onToggle, onSelect, t }) {
+function DirectoryRows({ node, depth, selected, collapsed, showCounts, onToggle, onSelect, t }) {
   const open = !collapsed.has(node.path)
   return (
     <>
@@ -187,9 +196,11 @@ function DirectoryRows({ node, depth, selected, collapsed, onToggle, onSelect, t
         <span className={css.icon} aria-hidden="true"><FolderGlyph /></span>
         <span className={css.folderName}>{node.name}/</span>
         {!open && <span className={css.folderCount}>{t('files.count', { count: String(countFiles(node)) })}</span>}
-        <span className={css.counts}>
-          <Counts added={node.added} removed={node.removed} binary={false} />
-        </span>
+        {showCounts && (
+          <span className={css.counts}>
+            <Counts added={node.added} removed={node.removed} binary={false} />
+          </span>
+        )}
       </button>
       {open && (
         <>
@@ -200,6 +211,7 @@ function DirectoryRows({ node, depth, selected, collapsed, onToggle, onSelect, t
               depth={depth + 1}
               selected={selected}
               collapsed={collapsed}
+              showCounts={showCounts}
               onToggle={onToggle}
               onSelect={onSelect}
               t={t}
@@ -361,6 +373,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   const [filterStaged, setFilterStaged] = useState(false)
   const [collapsed, setCollapsed] = useState(() => new Set())
   const [turnCollapsed, setTurnCollapsed] = useState(() => new Set())
+  const [folderCounts, setFolderCounts] = useState(true)
 
   useEffect(() => {
     // A bucket gone because the record aborted must not be re-seeded by a
@@ -457,6 +470,17 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
         {switchButton('git', t('source.uncommitted'))}
         {switchButton('rounds', t('source.rounds'))}
       </span>
+      <button
+        type="button"
+        className={folderCounts ? `${css.action} ${css.actionOn}` : css.action}
+        onClick={() => setFolderCounts(value => !value)}
+        title={t('toggle.folderCounts')}
+        aria-label={t('toggle.folderCounts')}
+        aria-pressed={folderCounts}
+        data-review-folder-counts={folderCounts ? 'on' : 'off'}
+      >
+        <TotalsGlyph />
+      </button>
       {source === 'git' && summary !== undefined && (
         <span className={css.branch} title={summary.root ?? undefined}>
           {summary.detached || summary.branch === null ? 'HEAD' : summary.branch}
@@ -565,6 +589,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                     depth={0}
                     selected={selected}
                     collapsed={collapsed}
+                    showCounts={folderCounts}
                     onToggle={onToggle}
                     onSelect={(path) => { select(tab.id, path, state.diffs[path] !== undefined, signal) }}
                     t={t}
@@ -640,6 +665,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                             depth={0}
                             selected={roundTurn === round.turn ? roundPath : null}
                             collapsed={collapsed}
+                            showCounts={folderCounts}
                             onToggle={onToggle}
                             onSelect={(path) => actions.selectRound(tab.id, round.turn, path)}
                             t={t}

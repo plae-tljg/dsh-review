@@ -136,6 +136,13 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* A toggle that is currently on, e.g. the folder-totals control. */
+.actionOn,
+.actionOn:hover {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+}
+
 /* ── split ──────────────────────────────────────────────────────────────── */
 
 .split {

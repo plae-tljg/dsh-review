@@ -226,11 +226,20 @@ export class WorkspaceReview extends TypertRemoteService {
       this.status(root, signal),
       this.counts(root, signal),
     ])
+    // `git diff` never reports an untracked path, so its line counts are read
+    // per file with `--no-index`. Without this a new file would carry no counts,
+    // contribute zero to its folders, and be missing from the report's total.
+    const untrackedPaths = status.entries
+      .filter(entry => entry.index === '?' && entry.worktree === '?' && !counts.has(entry.path))
+      .map(entry => entry.path)
+    const untrackedCounts = new Map(await Promise.all(untrackedPaths.map(async path => (
+      [path, await this.untrackedCount(root, path, signal)]
+    ))))
     const files = []
     let added = 0
     let removed = 0
     for (const entry of status.entries) {
-      const count = counts.get(entry.path)
+      const count = counts.get(entry.path) ?? untrackedCounts.get(entry.path) ?? null
       const line = {
         path: entry.path,
         status: statusOf(entry.index, entry.worktree),
@@ -240,8 +249,8 @@ export class WorkspaceReview extends TypertRemoteService {
         unstaged: entry.worktree !== ' ' && entry.worktree !== '?',
         untracked: entry.index === '?' && entry.worktree === '?',
         renamedFrom: entry.renamedFrom,
-        added: count === undefined ? null : count.added,
-        removed: count === undefined ? null : count.removed,
+        added: count === null ? null : count.added,
+        removed: count === null ? null : count.removed,
       }
       if (line.added !== null) added += line.added
       if (line.removed !== null) removed += line.removed
@@ -466,6 +475,33 @@ export class WorkspaceReview extends TypertRemoteService {
     ]), signal)
     // `--no-index` reports a diff through exit 1, which is not a failure here.
     return result.code === 1 ? { ...result, code: 0 } : result
+  }
+
+  /**
+   * Added and removed counts for one untracked path.
+   *
+   * `git diff` omits untracked paths, so the count comes from `--no-index`
+   * against the null device — the same read the diff body uses, so Git itself
+   * decides the binary case. A path Git reports as binary yields two `null`s.
+   * @param {string} root - Absolute workspace root.
+   * @param {string} path - Repository-relative path.
+   * @param {AbortSignal} signal - Caller cancellation.
+   * @returns {Promise<{ added: number|null, removed: number|null }|null>} The counts, or `null` when the read failed.
+   */
+  async untrackedCount(root, path, signal) {
+    const absolute = `${root.replace(/[/\\]+$/, '')}/${path}`
+    const result = await run(this.git(root, [
+      'diff', '--no-index', '--numstat', '--no-color', '--', '/dev/null', quote(absolute),
+    ]), signal)
+    // `--no-index` reports a diff through exit 1, which is not a failure here.
+    if (result.code !== 0 && result.code !== 1) return null
+    const record = result.stdout.split('\n')[0] ?? ''
+    const [added, removed] = record.split('\t')
+    if (added === undefined || removed === undefined) return null
+    return {
+      added: added === '-' ? null : Number(added),
+      removed: removed === '-' ? null : Number(removed),
+    }
   }
 }
 
