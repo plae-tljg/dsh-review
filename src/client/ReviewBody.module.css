@@ -16,13 +16,16 @@
 .header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  row-gap: 6px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
   flex: none;
 }
 
 .branch {
+  flex: 1 1 40px;
   font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
@@ -113,11 +116,12 @@
 }
 
 .totals {
-  margin-left: auto;
   display: flex;
   gap: 6px;
-  font: var(--dsw-font-xs-12);
   flex: none;
+  font: var(--dsw-font-xs-12);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .action {

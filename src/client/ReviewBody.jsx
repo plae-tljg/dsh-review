@@ -470,17 +470,21 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
         {switchButton('git', t('source.uncommitted'))}
         {switchButton('rounds', t('source.rounds'))}
       </span>
-      <button
-        type="button"
-        className={folderCounts ? `${css.action} ${css.actionOn}` : css.action}
-        onClick={() => setFolderCounts(value => !value)}
-        title={t('toggle.folderCounts')}
-        aria-label={t('toggle.folderCounts')}
-        aria-pressed={folderCounts}
-        data-review-folder-counts={folderCounts ? 'on' : 'off'}
-      >
-        <TotalsGlyph />
-      </button>
+      <span className={css.totals} data-review-totals={source}>
+        {source === 'git'
+          ? summary !== undefined && (
+            <>
+              {summary.added > 0 && <span className={css.added}>+{summary.added}</span>}
+              {summary.removed > 0 && <span className={css.removed}>-{summary.removed}</span>}
+            </>
+          )
+          : (
+            <>
+              {roundTotals.added > 0 && <span className={css.added}>+{roundTotals.added}</span>}
+              {roundTotals.removed > 0 && <span className={css.removed}>-{roundTotals.removed}</span>}
+            </>
+          )}
+      </span>
       {source === 'git' && summary !== undefined && (
         <span className={css.branch} title={summary.root ?? undefined}>
           {summary.detached || summary.branch === null ? 'HEAD' : summary.branch}
@@ -503,21 +507,17 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
           {collapsed.size > 0 ? '⊞' : '⊟'}
         </button>
       )}
-      <span className={css.totals}>
-        {source === 'git'
-          ? summary !== undefined && (
-            <>
-              {summary.added > 0 && <span className={css.added}>+{summary.added}</span>}
-              {summary.removed > 0 && <span className={css.removed}>-{summary.removed}</span>}
-            </>
-          )
-          : (
-            <>
-              {roundTotals.added > 0 && <span className={css.added}>+{roundTotals.added}</span>}
-              {roundTotals.removed > 0 && <span className={css.removed}>-{roundTotals.removed}</span>}
-            </>
-          )}
-      </span>
+      <button
+        type="button"
+        className={folderCounts ? `${css.action} ${css.actionOn}` : css.action}
+        onClick={() => setFolderCounts(value => !value)}
+        title={t('toggle.folderCounts')}
+        aria-label={t('toggle.folderCounts')}
+        aria-pressed={folderCounts}
+        data-review-folder-counts={folderCounts ? 'on' : 'off'}
+      >
+        <TotalsGlyph />
+      </button>
       {source === 'git' && (
         <button
           type="button"
