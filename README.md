@@ -5,11 +5,11 @@ An opencode-style **Review** panel for the [DeepSeek Harness](https://github.com
 - **Uncommitted** — the working tree against `HEAD`, as a directory tree of every changed file, with per-file `+added`/`-removed`, the branch's grand total, and the selected file's unified diff in red/green.
 - **Rounds** — what the agent changed in each conversation round, derived from the live conversation snapshot, shown with the same tree and the same diff body.
 - **Commits** — the recent commit history, newest first; a commit expands to the tree of files it touched, with its own counts, and selecting a file shows that path's diff *within* that commit. Commit files are read lazily, only when a commit is opened.
-- **Files** — a plain workspace browser: the tree of every non-ignored file (`git ls-files`, so `.gitignore` is honoured), the selected file's content on the right, and an **opt-in editor** (off by default) for direct edits.
+- **Files** — a plain workspace browser: the tree of every non-ignored file (`git ls-files`, so `.gitignore` is honoured), the selected file's content on the right, and an **opt-in editor** (off by default) for direct edits. Folders start collapsed with an expand-all/collapse-all control, and the file rail is **draggable** to widen or narrow.
 
 ```
 ┌ 审阅 ────────────────────────────────────────────────────────┐
-│  [ 未提交 | 按轮次 | 按提交 | 文件 ]  main ↑1   +42 -7     ⟳   │
+│  [ 文件 | 未提交 | 按轮次 | 按提交 ]  main ↑1   +42 -7     ⟳   │
 ├──────────────────────┬───────────────────────────────────────┤
 │ ▾ src/        +42 -5 │ @@ -14,7 +14,9 @@ export function r…  │
 │   ▾ api/      +8 -2  │   14  14   const rows = parse(input)  │

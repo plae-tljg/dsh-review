@@ -51,8 +51,8 @@
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   border-radius: 6px;
-  padding: 2px 10px;
-  font: var(--dsw-font-xs-12);
+  padding: 2px 8px;
+  font: var(--dsw-font-xxxs-11);
   font-weight: 500;
 }
 
@@ -149,8 +149,7 @@
   display: flex;
   gap: 6px;
   flex: none;
-  font: var(--dsw-font-xs-12);
-  font-weight: 600;
+  font: var(--dsw-font-xxxs-strong-11);
   font-variant-numeric: tabular-nums;
 }
 
@@ -180,18 +179,49 @@
 /* ── split ──────────────────────────────────────────────────────────────── */
 
 .split {
+  position: relative;
   display: grid;
-  /* The list is a fixed rail: a long path must not widen it and push the diff
-     out of the panel. */
-  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  /* The list is a resizable rail: a long path must not widen it and push the
+     diff out of the panel. The width is set on the drag handle below. */
+  grid-template-columns: minmax(0, var(--review-list-width, 260px)) minmax(0, 1fr);
   flex: 1;
   min-height: 0;
+}
+
+/* The drag handle rides the boundary and takes no grid track. */
+.divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--review-list-width, 260px);
+  width: 7px;
+  margin-left: -3px;
+  z-index: 5;
+  cursor: col-resize;
+}
+
+.divider::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+}
+
+.divider:hover::after,
+.divider:active::after {
+  background: var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
 }
 
 @media (width <= 520px) {
   .split {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 40%) minmax(0, 1fr);
+  }
+
+  .divider {
+    display: none;
   }
 }
 

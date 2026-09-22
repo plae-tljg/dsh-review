@@ -19,7 +19,7 @@
  */
 
 import { FileTypeIcon } from '@deepseek-ai/dsh-client-ui-primitives'
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import css from './ReviewBody.module.css'
 import { deriveRounds, lineDiff } from './rounds.js'
 
@@ -77,6 +77,29 @@ function directoryPaths(nodes, into = new Set()) {
     directoryPaths(node.directories, into)
   }
   return into
+}
+
+/**
+ * The expand-all / collapse-all control for one tree.
+ * @param {object} props - The tree's directories, its collapsed set, and the setter.
+ * @returns {import('react').ReactNode} The button, or null when the tree has no folder.
+ */
+function CollapseButton({ directories, collapsed, onCollapse, t }) {
+  const every = directoryPaths(directories)
+  if (every.size === 0) return null
+  const allCollapsed = collapsed.size >= every.size
+  return (
+    <button
+      type="button"
+      className={css.action}
+      onClick={() => onCollapse(allCollapsed ? new Set() : every)}
+      title={allCollapsed ? t('expandAll') : t('collapseAll')}
+      aria-label={allCollapsed ? t('expandAll') : t('collapseAll')}
+      data-review-collapse={allCollapsed ? 'expand' : 'collapse'}
+    >
+      {allCollapsed ? '⊞' : '⊟'}
+    </button>
+  )
 }
 
 /**
@@ -455,6 +478,11 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   const [turnCollapsed, setTurnCollapsed] = useState(() => new Set())
   const [folderCounts, setFolderCounts] = useState(true)
   const [wrap, setWrap] = useState(false)
+  // The Files tree starts fully collapsed: its set is null until the reader
+  // opens or closes a folder, and the default is derived from the tree.
+  const [filesCollapsed, setFilesCollapsed] = useState(null)
+  const [listWidth, setListWidth] = useState(260)
+  const listDrag = useRef(null)
   // Opening a file in a viewer tab: the panel supplies its own opener, while
   // the native seat builds a `dsh-resource://file` address for the session and
   // the repository-relative path.
@@ -563,8 +591,10 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
     })
   }, [])
 
+
   // ── Files-view state and reads ───────────────────────────────────────────
   const filesState = state?.files
+  const filesReport = filesState?.kind === 'ready' ? filesState.report : undefined
   const fileContent = state?.fileContent ?? EMPTY_STATE
   const filePath = state?.filePath ?? null
   const fileDraft = state?.fileDraft ?? null
@@ -584,6 +614,21 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
     if (filePath === null) return
     if (fileContent[filePath] === undefined) openFileContent(tab.id, filePath, signal)
   }, [source, filePath, fileContent, tab.id, signal, openFileContent])
+
+  // Every folder of the Files tree, its default (all collapsed) set.
+  const filesDefaultCollapsed = useMemo(
+    () => new Set(filesReport === undefined ? [] : [...directoryPaths(filesReport.tree.directories)]),
+    [filesReport],
+  )
+  const filesCollapsedSet = filesCollapsed ?? filesDefaultCollapsed
+  const onToggleFiles = useCallback((path) => {
+    setFilesCollapsed((current) => {
+      const next = new Set(current ?? filesDefaultCollapsed)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }, [filesDefaultCollapsed])
 
   // Opening a path reads its diff on demand. The face dispatches only when the
   // body is not held, so a re-render does not refetch, and `held` is a
@@ -614,13 +659,35 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
 
   const onRefresh = () => { refresh(tab.id, signal) }
 
+  const splitStyle = { '--review-list-width': `${String(listWidth)}px` }
+  const dividerProps = {
+    onPointerDown: (event) => {
+      event.preventDefault()
+      listDrag.current = { x: event.clientX, w: listWidth }
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+    },
+    onPointerMove: (event) => {
+      if (listDrag.current === null) return
+      const next = Math.min(560, Math.max(160, listDrag.current.w + (event.clientX - listDrag.current.x)))
+      setListWidth(next)
+    },
+    onPointerUp: (event) => {
+      listDrag.current = null
+      event.currentTarget.releasePointerCapture?.(event.pointerId)
+    },
+    onPointerCancel: (event) => {
+      listDrag.current = null
+      event.currentTarget.releasePointerCapture?.(event.pointerId)
+    },
+  }
+
   const header = (
     <div className={css.header}>
       <span className={css.switch}>
+        {switchButton('files', t('source.files'))}
         {switchButton('git', t('source.uncommitted'))}
         {switchButton('rounds', t('source.rounds'))}
         {switchButton('commits', t('source.commits'))}
-        {switchButton('files', t('source.files'))}
       </span>
       <span className={css.totals} data-review-totals={source}>
         {source === 'git'
@@ -644,20 +711,11 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
           {summary.behind > 0 && <span className={css.behind}>↓{summary.behind}</span>}
         </span>
       )}
-      {source === 'git' && summary !== undefined && directoryPaths(tree.directories).size > 0 && (
-        <button
-          type="button"
-          className={css.action}
-          onClick={() => {
-            const every = directoryPaths(tree.directories)
-            const allCollapsed = every.size > 0 && collapsed.size >= every.size
-            setCollapsed(allCollapsed ? new Set() : every)
-          }}
-          title={collapsed.size > 0 ? t('expandAll') : t('collapseAll')}
-          aria-label={collapsed.size > 0 ? t('expandAll') : t('collapseAll')}
-        >
-          {collapsed.size > 0 ? '⊞' : '⊟'}
-        </button>
+      {source === 'git' && summary !== undefined && (
+        <CollapseButton directories={tree.directories} collapsed={collapsed} onCollapse={setCollapsed} t={t} />
+      )}
+      {source === 'files' && filesReport !== undefined && (
+        <CollapseButton directories={filesReport.tree.directories} collapsed={filesCollapsedSet} onCollapse={setFilesCollapsed} t={t} />
       )}
       <button
         type="button"
@@ -744,7 +802,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
             </div>
           )
           : (
-            <div className={css.split}>
+            <div className={css.split} style={splitStyle}>
               <div className={css.list}>
                 {stagedPaths.length > 0 && (
                   <button
@@ -783,7 +841,8 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                 ))}
                 <p className={css.count}>{t('files.count', { count: String(files.length) })}</p>
               </div>
-              <div className={css.body}>
+              <div className={css.divider} role="separator" aria-orientation="vertical" {...dividerProps} />
+          <div className={css.body}>
                 {selected === null
                   ? <p className={css.notice}>{t('diff.select')}</p>
                   : held === undefined
@@ -820,7 +879,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
       <div className={css.root} data-review-state="files">
         {header}
         {filesState.report.truncated && <p className={css.hint}>{t('truncated')}</p>}
-        <div className={css.split}>
+        <div className={css.split} style={splitStyle}>
           <div className={css.list}>
             {filesState.report.tree.directories.map(node => (
               <DirectoryRows
@@ -828,10 +887,10 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                 node={node}
                 depth={0}
                 selected={filePath}
-                collapsed={collapsed}
+                collapsed={filesCollapsedSet}
                 showCounts={false}
                 plain
-                onToggle={onToggle}
+                onToggle={onToggleFiles}
                 onSelect={(path) => actions.selectFile(tab.id, path)}
                 t={t}
               />
@@ -849,6 +908,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
             ))}
             <p className={css.count}>{t('files.count', { count: String(filesState.report.count) })}</p>
           </div>
+          <div className={css.divider} role="separator" aria-orientation="vertical" {...dividerProps} />
           <div className={css.body}>
             {filePath === null
               ? <p className={css.notice}>{t('file.select')}</p>
@@ -909,7 +969,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
     return (
       <div className={css.root} data-review-state="commits">
         {header}
-        <div className={css.split}>
+        <div className={css.split} style={splitStyle}>
           <div className={css.list}>
             {commitList.map(commit => {
               const open = expandedCommits.has(commit.oid)
@@ -976,6 +1036,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
               )
             })}
           </div>
+          <div className={css.divider} role="separator" aria-orientation="vertical" {...dividerProps} />
           <div className={css.body}>
             {commitOid === null || commitPath === null
               ? <p className={css.notice}>{t('diff.select')}</p>
@@ -1003,7 +1064,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
           </div>
         )
         : (
-          <div className={css.split}>
+          <div className={css.split} style={splitStyle}>
             <div className={css.list}>
               {rounds.map(round => {
                 const open = !turnCollapsed.has(round.turn)
@@ -1056,7 +1117,8 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
               })}
               <p className={css.count}>{t('files.count', { count: String(rounds.length) })}</p>
             </div>
-            <div className={css.body}>
+            <div className={css.divider} role="separator" aria-orientation="vertical" {...dividerProps} />
+          <div className={css.body}>
               {selectedRound === undefined || selectedRoundFile === undefined
                 ? <p className={css.notice}>{t('round.select')}</p>
                 : <RoundDiffBody round={selectedRound} file={selectedRoundFile} t={t} wrap={wrap} onOpen={openInTab} />}

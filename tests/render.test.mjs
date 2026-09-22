@@ -312,6 +312,28 @@ test('the Files view shows a tree and the selected content', async () => {
   assert.match(html, /hello/)
 })
 
+test('the Files tree starts collapsed, offers collapse-all, and leads the switch', async () => {
+  const file = {
+    path: 'src/a.ts', status: 'modified', index: ' ', worktree: ' ', staged: false,
+    unstaged: false, untracked: false, renamedFrom: null, added: null, removed: null,
+  }
+  const node = { kind: 'directory', name: 'src', path: 'src', directories: [], files: [file], added: 0, removed: 0 }
+  const html = await renderBody(reportFixture(), {
+    bucket: {
+      source: 'files',
+      files: {
+        kind: 'ready',
+        report: { isRepository: true, root: '/repo', count: 1, truncated: false, files: [file], tree: { directories: [node], files: [] } },
+      },
+    },
+  })
+  // The collapse-all control is present, and the folder is shut.
+  assert.match(html, /data-review-collapse/)
+  assert.doesNotMatch(html, /data-review-row="src\/a\.ts"/)
+  // Files leads the source switch.
+  assert.ok(html.indexOf('data-review-source="files"') < html.indexOf('data-review-source="git"'))
+})
+
 test('the body reports a non-repository workspace', async () => {
   const html = await renderBody({
     isRepository: false, root: null, branch: null, detached: false, upstream: null,
