@@ -267,7 +267,7 @@
 .folderCount {
   flex: none;
   color: var(--dsw-alias-label-tertiary);
-  font: var(--dsw-font-xs-12);
+  font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
 }
 
@@ -279,8 +279,7 @@
   justify-content: center;
   width: 16px;
   height: 16px;
-  font: var(--dsw-font-xs-12);
-  font-weight: 600;
+  font: var(--dsw-font-xxxs-strong-11);
   line-height: 1;
   text-transform: uppercase;
   font-variant-numeric: tabular-nums;
@@ -312,7 +311,7 @@
   flex: none;
   display: flex;
   gap: 4px;
-  font: var(--dsw-font-xs-12);
+  font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
 }
 
