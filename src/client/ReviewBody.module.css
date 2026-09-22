@@ -249,6 +249,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--dsw-alias-label-primary);
+  font-size: 12px;
   font-weight: 500;
 }
 
@@ -259,6 +260,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--dsw-alias-label-primary);
+  font-size: 12px;
 }
 
 /* How many files a folded folder holds, shown only while it is closed. */

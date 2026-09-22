@@ -18,6 +18,7 @@
  * makes the reader reconstruct that grouping from the middle of every path.
  */
 
+import { FileTypeIcon } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import css from './ReviewBody.module.css'
 import { deriveRounds, lineDiff } from './rounds.js'
@@ -111,25 +112,6 @@ function ChevronGlyph() {
   )
 }
 
-/** The folder glyph on a directory row. */
-function FolderGlyph() {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-      <path d="M2 4.25C2 3.56 2.56 3 3.25 3h2.4c.33 0 .65.13.88.37l.9.9c.24.24.56.37.89.37h4.43c.69 0 1.25.56 1.25 1.25v5.86c0 .69-.56 1.25-1.25 1.25h-9.5C2.56 13 2 12.44 2 11.75V4.25z" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
-/** The page glyph on a file row. */
-function FileGlyph() {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-      <path d="M4 3.25C4 2.56 4.56 2 5.25 2h3.4L12 5.35v7.4c0 .69-.56 1.25-1.25 1.25h-5.5C4.56 14 4 13.44 4 12.75V3.25z" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M8.5 2.2V5.4h3.2" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
 /** The sigma glyph on the folder-totals toggle. */
 function TotalsGlyph() {
   return (
@@ -166,7 +148,7 @@ function FileRow({ file, active, depth, t, onSelect }) {
       data-review-active={active ? 'true' : undefined}
     >
       <span className={css.chevron} aria-hidden="true" />
-      <span className={css.icon} aria-hidden="true"><FileGlyph /></span>
+      <span className={css.icon} aria-hidden="true"><FileTypeIcon path={file.path} size={16} /></span>
       <span className={css.fileName}>{baseName(file.path)}</span>
       <span className={css.change} data-change={file.status} aria-label={label} title={label}>
         {STATUS_LETTER[file.status] ?? 'M'}
@@ -202,8 +184,8 @@ function DirectoryRows({ node, depth, selected, collapsed, showCounts, onToggle,
         <span className={css.chevron} data-expanded={open ? 'true' : undefined} aria-hidden="true">
           <ChevronGlyph />
         </span>
-        <span className={css.icon} aria-hidden="true"><FolderGlyph /></span>
-        <span className={css.folderName}>{node.name}/</span>
+        <span className={css.icon} aria-hidden="true"><FileTypeIcon kind="folder" size={16} /></span>
+        <span className={css.folderName}>{node.name}</span>
         {!open && <span className={css.folderCount}>{t('files.count', { count: String(countFiles(node)) })}</span>}
         {showCounts && (
           <span className={css.counts}>

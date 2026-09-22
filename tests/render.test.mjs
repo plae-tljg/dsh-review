@@ -191,7 +191,7 @@ test('the Rounds view renders a round, its tree, and the selected diff', async (
   const html = await renderRounds()
   assert.match(html, /data-review-state="rounds"/)
   assert.match(html, /round\.label/)
-  assert.match(html, /src\//)
+  assert.match(html, />src</)
   assert.match(html, /app\.ts/)
   assert.match(html, /data-review-round-diff="src\/app\.ts"/)
   // The recorded hunk is expanded into red/green lines.
@@ -202,7 +202,7 @@ test('the Rounds view renders a round, its tree, and the selected diff', async (
 test('the body renders the file tree with folder totals and root files', async () => {
   const html = await renderBody(reportFixture())
   // Both directories, including the folded one, with their aggregates.
-  assert.match(html, /src\//)
+  assert.match(html, />src</)
   assert.match(html, /\+20/)
   // The root-level file is rendered beside the tree, not dropped.
   assert.match(html, /README\.md/)
@@ -258,8 +258,8 @@ test('the body indents a nested row deeper than its folder', async () => {
     const tag = html.lastIndexOf('<button', at)
     return Number(/padding-left:(\d+)px/.exec(html.slice(tag, at))?.[1])
   }
-  assert.ok(indentOf('src/') < indentOf('ReviewBody.tsx'), 'a file must indent past its folder')
-  assert.ok(indentOf('README.md') < indentOf('ReviewBody.tsx'), 'a root file must indent less than a nested one')
+  assert.ok(indentOf('>src<') < indentOf('>ReviewBody.tsx<'), 'a file must indent past its folder')
+  assert.ok(indentOf('>README.md<') < indentOf('>ReviewBody.tsx<'), 'a root file must indent less than a nested one')
 })
 
 test('the body reports an empty tree as no changes', async () => {
@@ -295,6 +295,7 @@ async function loadClientHalf() {
     ['react', react],
     ['react/jsx-runtime', jsxRuntime],
     ['@deepseek-ai/dsh-client-store', clientStore],
+    ['@deepseek-ai/dsh-client-ui-primitives', { FileTypeIcon: () => null }],
   ])
   return registration.factory((name) => {
     if (!rows.has(name)) throw new Error(`undeclared module row: ${name}`)

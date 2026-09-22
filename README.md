@@ -19,7 +19,7 @@ An opencode-style **Review** panel for the [DeepSeek Harness](https://github.com
 └──────────────────────┴───────────────────────────────────────┘
 ```
 
-The look is a deliberate port of **opencode's** right-hand review panel (see [docs/REFERENCES.md](docs/REFERENCES.md)): 28px tree rows with a 6px radius and whole-row hover/selection, a rotating chevron, 16px file and folder glyphs, an uppercase change letter in the theme's state colour, tabular-figure counts, and a segmented source switch.
+The look is a deliberate port of **opencode's** right-hand review panel (see [docs/REFERENCES.md](docs/REFERENCES.md)): 28px tree rows with a 6px radius and whole-row hover/selection, a rotating chevron, 12px names, **language-aware file-type icons** (Python, JS/TS, JSON, Markdown, … via the harness's own `FileTypeIcon`), an uppercase change letter in the theme's state colour, tabular-figure counts, and a segmented source switch.
 
 ## What it does
 

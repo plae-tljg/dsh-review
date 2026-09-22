@@ -40,6 +40,7 @@ function loadClientHalf() {
     ['react', react],
     ['react/jsx-runtime', jsx],
     ['@deepseek-ai/dsh-client-store', clientStore],
+    ['@deepseek-ai/dsh-client-ui-primitives', { FileTypeIcon: () => null }],
   ])
   const exports = registration.factory((name) => {
     if (!rows.has(name)) throw new Error(`client bundle requested an undeclared module row: ${name}`)
