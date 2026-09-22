@@ -345,6 +345,46 @@ export function parseNumstat(stdout) {
   return counts
 }
 
+/** The status letter `git --name-status` prints, mapped to the report vocabulary. */
+const NAME_STATUS = {
+  A: 'added',
+  M: 'modified',
+  D: 'deleted',
+  T: 'typechange',
+  R: 'renamed',
+  C: 'copied',
+}
+
+/**
+ * Parse `git show --name-status -z` (or `diff-tree`) into per-path status rows.
+ *
+ * The `-z` form is NUL-separated: one record per change, `STATUS\0path\0`, and a
+ * rename or copy occupies three fields (`R100\0old\0new\0`). The status letter is
+ * mapped onto the same vocabulary the porcelain listing uses.
+ * @param {string} stdout - Raw `--name-status -z` output.
+ * @returns {Array<{ path: string, status: string, renamedFrom: string|null }>} One entry per changed path.
+ */
+export function parseNameStatus(stdout) {
+  const records = stdout.split('\0')
+  const entries = []
+  for (let at = 0; at < records.length; at += 1) {
+    const code = records[at]
+    if (code === undefined || code.length === 0) continue
+    const letter = code.slice(0, 1)
+    if (letter === 'R' || letter === 'C') {
+      const from = records[at + 1] ?? ''
+      const to = records[at + 2] ?? ''
+      at += 2
+      if (to !== '') entries.push({ path: to, status: NAME_STATUS[letter], renamedFrom: from })
+      continue
+    }
+    const path = records[at + 1] ?? ''
+    at += 1
+    if (path !== '') entries.push({ path, status: NAME_STATUS[letter] ?? 'modified', renamedFrom: null })
+  }
+  return entries
+}
+
 /**
  * Group changed files into the directory tree a review list draws.
  *

@@ -59,6 +59,11 @@ export function createReviewStore() {
           source: 'git',
           roundTurn: null,
           roundPath: null,
+          commits: { kind: 'idle' },
+          commitFiles: {},
+          commitDiffs: {},
+          commitOid: null,
+          commitPath: null,
         }
       },
       /**
@@ -83,6 +88,118 @@ export function createReviewStore() {
         if (tab === undefined) return
         tab.roundTurn = turn
         tab.roundPath = path
+      },
+      /**
+       * Mark the commit list as being read.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       */
+      commitsLoading: (draft, tabId) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.commits = { kind: 'loading' }
+      },
+      /**
+       * Record the commit list.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {object} report - The `commits` result the Host sent.
+       */
+      commitsLoaded: (draft, tabId, report) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.commits = { kind: 'ready', report }
+      },
+      /**
+       * Record why the commit list could not be read.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} code - The Remote failure code.
+       * @param {string} message - The Remote failure message.
+       */
+      commitsFailed: (draft, tabId, code, message) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.commits = { kind: 'failed', code, message }
+      },
+      /**
+       * Mark one commit's file list as being read.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} oid - The commit being read.
+       */
+      commitLoading: (draft, tabId, oid) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.commitFiles[oid] = { kind: 'loading' }
+      },
+      /**
+       * Record one commit's file list.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} oid - The commit that was read.
+       * @param {object} report - The `commitChanges` result the Host sent.
+       */
+      commitLoaded: (draft, tabId, oid, report) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.commitFiles[oid] = { kind: 'ready', report }
+      },
+      /**
+       * Record why one commit's file list could not be read.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} oid - The commit that was read.
+       * @param {string} code - The Remote failure code.
+       * @param {string} message - The Remote failure message.
+       */
+      commitFailed: (draft, tabId, oid, code, message) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.commitFiles[oid] = { kind: 'failed', code, message }
+      },
+      /**
+       * Mark one commit path's diff as being read.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} oid - The commit.
+       * @param {string} path - The path being read.
+       */
+      commitDiffLoading: (draft, tabId, oid, path) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.commitDiffs[`${oid}\u0000${path}`] = { kind: 'loading' }
+      },
+      /**
+       * Record one commit path's diff body.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} oid - The commit.
+       * @param {string} path - The path that was read.
+       * @param {object} diff - The parsed diff the Host sent.
+       */
+      commitDiffLoaded: (draft, tabId, oid, path, diff) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.commitDiffs[`${oid}\u0000${path}`] = { kind: 'ready', diff }
+      },
+      /**
+       * Record why one commit path's diff could not be read.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} oid - The commit.
+       * @param {string} path - The path that was read.
+       * @param {string} code - The Remote failure code.
+       * @param {string} message - The Remote failure message.
+       */
+      commitDiffFailed: (draft, tabId, oid, path, code, message) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.commitDiffs[`${oid}\u0000${path}`] = { kind: 'failed', code, message }
+      },
+      /**
+       * Open one commit's path.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} oid - The commit.
+       * @param {string} path - The path to open.
+       */
+      selectCommit: (draft, tabId, oid, path) => {
+        const tab = draft.byTab[tabId]
+        if (tab === undefined) return
+        tab.commitOid = oid
+        tab.commitPath = path
       },
       /**
        * Mark the file list as being read.

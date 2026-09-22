@@ -109,7 +109,7 @@ async function renderBody(report, options = {}) {
     },
   }
   apply(ctx)
-  const state = { byTab: { t1: { report: { kind: 'ready', report }, diffs: options.diffs ?? {}, selected: 'src/client/ReviewBody.tsx', staged: {}, source: 'git', roundTurn: null, roundPath: null } } }
+  const state = { byTab: { t1: { report: { kind: 'ready', report }, diffs: options.diffs ?? {}, selected: 'src/client/ReviewBody.tsx', staged: {}, source: 'git', roundTurn: null, roundPath: null, ...options.bucket } } }
   // The component goes through React, not a direct call: calling it as a plain
   // function would run its hooks outside a renderer and throw.
   return renderToStaticMarkup(React.createElement(Body, {
@@ -267,6 +267,27 @@ test('the body reports an empty tree as no changes', async () => {
   const html = await renderBody(empty)
   assert.match(html, /data-review-state="empty"/)
   assert.match(html, /empty\.title/)
+})
+
+test('the Commit view lists commits', async () => {
+  const oid = 'a'.repeat(40)
+  const html = await renderBody(reportFixture(), {
+    bucket: {
+      source: 'commits',
+      commits: {
+        kind: 'ready',
+        report: {
+          isRepository: true,
+          root: '/repo',
+          commits: [{ oid, short: 'aaaaaaa', timestamp: 1, author: 'T', subject: 'first commit' }],
+        },
+      },
+    },
+  })
+  assert.match(html, /data-review-state="commits"/)
+  assert.match(html, /data-review-commit/)
+  assert.match(html, /first commit/)
+  assert.match(html, /aaaaaaa/)
 })
 
 test('the body reports a non-repository workspace', async () => {

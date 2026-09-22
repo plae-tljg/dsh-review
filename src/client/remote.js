@@ -86,6 +86,33 @@ const reviewDiff = z.object({
   patch: z.string(),
 })
 
+const commitMeta = z.object({
+  oid: z.string(),
+  short: z.string(),
+  timestamp: z.number(),
+  author: z.string(),
+  subject: z.string(),
+})
+
+const reviewCommits = z.object({
+  isRepository: z.boolean(),
+  root: z.string().nullable(),
+  commits: z.array(commitMeta),
+})
+
+const reviewCommit = z.object({
+  isRepository: z.boolean(),
+  root: z.string().nullable(),
+  oid: z.string(),
+  files: z.array(reviewFile),
+  tree: z.object({
+    directories: z.array(treeNode),
+    files: z.array(reviewFile),
+  }),
+  added: z.number(),
+  removed: z.number(),
+})
+
 /**
  * The error-code and namespace merges that type this contribution live in
  * `types/augment.d.ts`: this package is authored in plain JavaScript, and a
@@ -142,6 +169,73 @@ export const TYPERT_REMOTE = {
             typeSymbol: 'dsh-review/host/types#ReviewPath',
             schema: z.string(),
           },
+        },
+      ],
+      cancellation: { parameter: 'signal' },
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-review/host/types#ReviewDiff',
+        schema: reviewDiff,
+      },
+    },
+    {
+      id: 'dsh-review#workspaceReview/commits',
+      service: 'workspaceReview',
+      namespace: 'workspaceReview',
+      method: 'commits',
+      invocation: { kind: 'direct' },
+      scope: { context: 'agent', wire: 'agentId' },
+      parameters: [agentParameter],
+      cancellation: { parameter: 'signal' },
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-review/host/types#ReviewCommits',
+        schema: reviewCommits,
+      },
+    },
+    {
+      id: 'dsh-review#workspaceReview/commitChanges',
+      service: 'workspaceReview',
+      namespace: 'workspaceReview',
+      method: 'commitChanges',
+      invocation: { kind: 'direct' },
+      scope: { context: 'agent', wire: 'agentId' },
+      parameters: [
+        agentParameter,
+        {
+          name: 'oid',
+          wire: 'oid',
+          source: 'json',
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#CommitId', schema: z.string() },
+        },
+      ],
+      cancellation: { parameter: 'signal' },
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-review/host/types#ReviewCommit',
+        schema: reviewCommit,
+      },
+    },
+    {
+      id: 'dsh-review#workspaceReview/commitDiff',
+      service: 'workspaceReview',
+      namespace: 'workspaceReview',
+      method: 'commitDiff',
+      invocation: { kind: 'direct' },
+      scope: { context: 'agent', wire: 'agentId' },
+      parameters: [
+        agentParameter,
+        {
+          name: 'oid',
+          wire: 'oid',
+          source: 'json',
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#CommitId', schema: z.string() },
+        },
+        {
+          name: 'path',
+          wire: 'path',
+          source: 'json',
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewPath', schema: z.string() },
         },
       ],
       cancellation: { parameter: 'signal' },

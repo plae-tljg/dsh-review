@@ -38,6 +38,9 @@ const STATUS_LETTER = {
 /** A tree with nothing in it; a stable identity so the memo never churns. */
 const EMPTY_TREE = { directories: [], files: [] }
 
+/** A map with nothing in it, for the same reason. */
+const EMPTY_STATE = {}
+
 /** The basename of a repository path. */
 function baseName(path) {
   const at = path.lastIndexOf('/')
@@ -370,7 +373,7 @@ function RoundDiffBody({ round, file, t, wrap, onOpen }) {
  * @param {object} props - The Slot shares this registration derives.
  * @returns {import('react').ReactNode} The tab body.
  */
-export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, select, open, t, conversation, sessionId, openFile }) {
+export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, select, open, listCommits, openCommit, openCommitDiff, t, conversation, sessionId, openFile }) {
   const { tab } = useTabInfo()
   const { signal } = tab
   const state = useStore(store => store.byTab[tab.id])
@@ -448,6 +451,45 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
     })
   }, [])
 
+  // ── Commit-view state and reads ──────────────────────────────────────────
+  const commitsState = state?.commits
+  const commitFiles = state?.commitFiles ?? EMPTY_STATE
+  const commitDiffs = state?.commitDiffs ?? EMPTY_STATE
+  const commitOid = state?.commitOid ?? null
+  const commitPath = state?.commitPath ?? null
+  const [expandedCommits, setExpandedCommits] = useState(() => new Set())
+
+  // Read the commit list the first time the Commit source is shown.
+  useEffect(() => {
+    if (source !== 'commits' || signal.aborted) return
+    const kind = commitsState?.kind
+    if (kind === undefined || kind === 'idle') listCommits(tab.id, signal)
+  }, [source, commitsState?.kind, tab.id, signal, listCommits])
+
+  // Expanding a commit reads its file list, once.
+  useEffect(() => {
+    if (source !== 'commits' || signal.aborted) return
+    for (const oid of expandedCommits) {
+      if (commitFiles[oid] === undefined) openCommit(tab.id, oid, signal)
+    }
+  }, [source, expandedCommits, commitFiles, tab.id, signal, openCommit])
+
+  // Opening a commit path reads its diff, once.
+  useEffect(() => {
+    if (source !== 'commits' || signal.aborted) return
+    if (commitOid === null || commitPath === null) return
+    if (commitDiffs[`${commitOid}\u0000${commitPath}`] === undefined) openCommitDiff(tab.id, commitOid, commitPath, signal)
+  }, [source, commitOid, commitPath, commitDiffs, tab.id, signal, openCommitDiff])
+
+  const onToggleCommit = useCallback((oid) => {
+    setExpandedCommits((current) => {
+      const next = new Set(current)
+      if (next.has(oid)) next.delete(oid)
+      else next.add(oid)
+      return next
+    })
+  }, [])
+
   // Opening a path reads its diff on demand. The face dispatches only when the
   // body is not held, so a re-render does not refetch, and `held` is a
   // dependency so a body cleared by a refresh is read again.
@@ -482,6 +524,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
       <span className={css.switch}>
         {switchButton('git', t('source.uncommitted'))}
         {switchButton('rounds', t('source.rounds'))}
+        {switchButton('commits', t('source.commits'))}
       </span>
       <span className={css.totals} data-review-totals={source}>
         {source === 'git'
@@ -640,6 +683,118 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
               </div>
             </div>
           )}
+      </div>
+    )
+  }
+
+  // ── Commits ───────────────────────────────────────────────────────────────
+
+  if (source === 'commits') {
+    if (commitsState === undefined || commitsState.kind === 'idle' || commitsState.kind === 'loading') {
+      return <div className={css.root} data-review-state="commits-loading">{header}<p className={css.notice}>{t('refreshing')}</p></div>
+    }
+    if (commitsState.kind === 'failed') {
+      return (
+        <div className={css.root} data-review-state="commits-failed">
+          {header}
+          <p className={css.notice}>{t('error.unavailable', { message: commitsState.message })}</p>
+          <button type="button" className={css.action} onClick={() => { listCommits(tab.id, signal) }}>{t('reload')}</button>
+        </div>
+      )
+    }
+    if (!commitsState.report.isRepository) {
+      return <div className={css.root} data-review-state="not-repository">{header}<p className={css.notice}>{t('notRepository')}</p></div>
+    }
+    const commitList = commitsState.report.commits
+    if (commitList.length === 0) {
+      return (
+        <div className={css.root} data-review-state="commits-empty">
+          {header}
+          <div className={css.empty}><p className={css.emptyTitle}>{t('commit.empty')}</p></div>
+        </div>
+      )
+    }
+    const heldCommitDiff = commitOid === null || commitPath === null
+      ? undefined
+      : commitDiffs[`${commitOid}\u0000${commitPath}`]
+    return (
+      <div className={css.root} data-review-state="commits">
+        {header}
+        <div className={css.split}>
+          <div className={css.list}>
+            {commitList.map(commit => {
+              const open = expandedCommits.has(commit.oid)
+              const files = commitFiles[commit.oid]
+              const report = files?.kind === 'ready' ? files.report : undefined
+              return (
+                <div key={commit.oid} data-review-commit={commit.oid}>
+                  <button
+                    type="button"
+                    className={css.turn}
+                    onClick={() => onToggleCommit(commit.oid)}
+                    aria-expanded={open}
+                    title={commit.subject}
+                  >
+                    <span className={css.chevron} data-expanded={open ? 'true' : undefined} aria-hidden="true">
+                      <ChevronGlyph />
+                    </span>
+                    <span className={css.commitBody}>
+                      <span className={css.commitSubject}>{commit.subject === '' ? commit.short : commit.subject}</span>
+                      <span className={css.commitMeta}>{commit.short} · {commit.author}</span>
+                    </span>
+                    {report !== undefined && (
+                      <span className={css.counts}>
+                        <Counts added={report.added} removed={report.removed} binary={false} />
+                      </span>
+                    )}
+                  </button>
+                  {open && (
+                    <div className={css.roundFiles}>
+                      {files === undefined || files.kind === 'loading'
+                        ? <p className={css.notice}>{t('refreshing')}</p>
+                        : files.kind === 'failed'
+                          ? <p className={css.notice}>{t('error.unavailable', { message: files.message })}</p>
+                          : (
+                            <>
+                              {files.report.tree.directories.map(node => (
+                                <DirectoryRows
+                                  key={node.path}
+                                  node={node}
+                                  depth={0}
+                                  selected={commitOid === commit.oid ? commitPath : null}
+                                  collapsed={collapsed}
+                                  showCounts={folderCounts}
+                                  onToggle={onToggle}
+                                  onSelect={(path) => actions.selectCommit(tab.id, commit.oid, path)}
+                                  t={t}
+                                />
+                              ))}
+                              {files.report.tree.files.map(file => (
+                                <FileRow
+                                  key={file.path}
+                                  file={file}
+                                  active={commitOid === commit.oid && commitPath === file.path}
+                                  depth={0}
+                                  t={t}
+                                  onSelect={() => actions.selectCommit(tab.id, commit.oid, file.path)}
+                                />
+                              ))}
+                            </>
+                          )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div className={css.body}>
+            {commitOid === null || commitPath === null
+              ? <p className={css.notice}>{t('diff.select')}</p>
+              : heldCommitDiff === undefined
+                ? <p className={css.notice}>{t('refreshing')}</p>
+                : <DiffBody state={heldCommitDiff} path={commitPath} t={t} wrap={wrap} onOpen={openInTab} />}
+          </div>
+        </div>
       </div>
     )
   }

@@ -122,6 +122,60 @@ export function reviewFace(remote, getConversation) {
       })
     }
 
+    /**
+     * Read the recent commit list.
+     * @param {string} tabId - The tab being drawn.
+     * @param {AbortSignal} signal - The tab record's lifetime.
+     */
+    const loadCommits = (tabId, signal) => {
+      if (signal.aborted) return
+      const key = `commits\u0000${tabId}`
+      const generation = claim(generations, key)
+      actions.commitsLoading(tabId)
+      void withDeadline(remote.workspaceReview.commits(sessionId, signal), READ_TIMEOUT_MS).then((result) => {
+        if (generations.get(key) !== generation) return
+        if (result.ok) actions.commitsLoaded(tabId, result.value)
+        else actions.commitsFailed(tabId, result.error.code, result.error.message)
+      })
+    }
+
+    /**
+     * Read one commit's changed files.
+     * @param {string} tabId - The tab being drawn.
+     * @param {string} oid - The commit to read.
+     * @param {AbortSignal} signal - The tab record's lifetime.
+     */
+    const loadCommit = (tabId, oid, signal) => {
+      if (signal.aborted) return
+      const key = `commitFiles\u0000${tabId}\u0000${oid}`
+      const generation = claim(generations, key)
+      actions.commitLoading(tabId, oid)
+      void withDeadline(remote.workspaceReview.commitChanges(sessionId, oid, signal), READ_TIMEOUT_MS).then((result) => {
+        if (generations.get(key) !== generation) return
+        if (result.ok) actions.commitLoaded(tabId, oid, result.value)
+        else actions.commitFailed(tabId, oid, result.error.code, result.error.message)
+      })
+    }
+
+    /**
+     * Read one path's diff within one commit.
+     * @param {string} tabId - The tab being drawn.
+     * @param {string} oid - The commit.
+     * @param {string} path - The path to read.
+     * @param {AbortSignal} signal - The tab record's lifetime.
+     */
+    const loadCommitDiff = (tabId, oid, path, signal) => {
+      if (signal.aborted) return
+      const key = `commitDiff\u0000${tabId}\u0000${oid}\u0000${path}`
+      const generation = claim(diffGenerations, key)
+      actions.commitDiffLoading(tabId, oid, path)
+      void withDeadline(remote.workspaceReview.commitDiff(sessionId, oid, path, signal), READ_TIMEOUT_MS).then((result) => {
+        if (diffGenerations.get(key) !== generation) return
+        if (result.ok) actions.commitDiffLoaded(tabId, oid, path, result.value)
+        else actions.commitDiffFailed(tabId, oid, path, result.error.code, result.error.message)
+      })
+    }
+
     return {
       /** The session identity, for building a workspace file address. */
       sessionId,
@@ -147,6 +201,15 @@ export function reviewFace(remote, getConversation) {
       },
       open(tabId, path, signal) {
         loadDiff(tabId, path, signal)
+      },
+      listCommits(tabId, signal) {
+        loadCommits(tabId, signal)
+      },
+      openCommit(tabId, oid, signal) {
+        loadCommit(tabId, oid, signal)
+      },
+      openCommitDiff(tabId, oid, path, signal) {
+        loadCommitDiff(tabId, oid, path, signal)
       },
     }
   }

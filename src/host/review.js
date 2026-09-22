@@ -26,7 +26,7 @@
 
 import { exec } from 'node:child_process'
 import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import { buildTree, parseNumstat, parseUnifiedDiff } from './unified.js'
+import { buildTree, parseNameStatus, parseNumstat, parseUnifiedDiff } from './unified.js'
 
 /** Deployment caps on one listing or one patch. */
 export const DEFAULT_CONFIG = {
@@ -34,6 +34,8 @@ export const DEFAULT_CONFIG = {
   maxDiffBytes: 2 * 1024 * 1024,
   /** Cap on reported changed files; the rest is dropped and reported cut. */
   maxStatusEntries: 5000,
+  /** Cap on the commits listed in the Commit view. */
+  maxCommits: 50,
 }
 
 /** Stdout budget for one command; a diff larger than this is cut by the pipe, not here. */
@@ -339,6 +341,135 @@ export class WorkspaceReview extends TypertRemoteService {
       },
       patch,
     }
+  }
+
+  /**
+   * The recent commits of the session workspace, newest first.
+   *
+   * Metadata only: a commit's file list is read lazily by `commitChanges`, so
+   * opening the Commit view does not pay for a diff of every commit.
+   * @param {object} agent - Target Agent resolved from the Session identity on the wire.
+   * @param {AbortSignal} signal - Caller cancellation.
+   * @returns {Promise<object>} The commit list; `isRepository: false` when the root is not a work tree.
+   */
+  async commits(agent, signal) {
+    const root = this.rootOf(agent)
+    if (!(await this.isRepository(root, signal))) {
+      return { isRepository: false, root: null, commits: [] }
+    }
+    const stdout = await this.gitRun(root, [
+      'log', `-n${this.config.maxCommits}`, '--no-color', '--no-merges',
+      '--pretty=format:%H%x00%h%x00%at%x00%an%x00%s%x00',
+    ], signal, 'git log')
+    const commits = []
+    for (const record of stdout.split('\n')) {
+      if (record === '') continue
+      const [oid, short, at, author, subject] = record.split('\u0000')
+      if (oid === undefined || oid === '') continue
+      commits.push({
+        oid,
+        short: short === undefined || short === '' ? oid.slice(0, 7) : short,
+        timestamp: Number(at) || 0,
+        author: author ?? '',
+        subject: subject ?? '',
+      })
+    }
+    return { isRepository: true, root, commits }
+  }
+
+  /**
+   * One commit's changed files, with counts and a directory tree.
+   * @param {object} agent - Target Agent resolved from the Session identity on the wire.
+   * @param {string} oid - The commit to read.
+   * @param {AbortSignal} signal - Caller cancellation.
+   * @returns {Promise<object>} The commit report.
+   */
+  async commitChanges(agent, oid, signal) {
+    const root = this.rootOf(agent)
+    this.oidOf(oid)
+    const [numstat, nameStatus] = await Promise.all([
+      this.gitRun(root, ['show', '--numstat', '-z', '-M', '--format=', oid], signal, 'git show --numstat'),
+      this.gitRun(root, ['show', '--name-status', '-z', '-M', '--format=', oid], signal, 'git show --name-status'),
+    ])
+    const counts = parseNumstat(numstat)
+    const files = []
+    let added = 0
+    let removed = 0
+    for (const entry of parseNameStatus(nameStatus)) {
+      const count = counts.get(entry.path) ?? null
+      const line = {
+        path: entry.path,
+        status: entry.status,
+        index: ' ',
+        worktree: ' ',
+        staged: false,
+        unstaged: false,
+        untracked: false,
+        renamedFrom: entry.renamedFrom,
+        added: count === null ? null : count.added,
+        removed: count === null ? null : count.removed,
+      }
+      if (line.added !== null) added += line.added
+      if (line.removed !== null) removed += line.removed
+      files.push(line)
+    }
+    files.sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
+    return {
+      isRepository: true,
+      root,
+      oid,
+      files,
+      tree: buildTree(files),
+      added,
+      removed,
+    }
+  }
+
+  /**
+   * The unified diff of one path within one commit, parsed into hunks.
+   * @param {object} agent - Target Agent resolved from the Session identity on the wire.
+   * @param {string} oid - The commit to read.
+   * @param {string} path - Repository-relative path from a `commitChanges` row.
+   * @param {AbortSignal} signal - Caller cancellation.
+   * @returns {Promise<object>} The parsed diff, shaped like `diff`.
+   */
+  async commitDiff(agent, oid, path, signal) {
+    const root = this.rootOf(agent)
+    this.oidOf(oid)
+    if (typeof path !== 'string' || path.length === 0 || path.startsWith('/') || path.includes('\0')) {
+      throw new RemoteError('gateway/bad-request', `invalid path ${JSON.stringify(path)}`, {})
+    }
+    const result = await run(this.git(root, [
+      'show', '--no-color', '--no-ext-diff', '--find-renames', '--format=', oid, '--', quote(path),
+    ]), signal)
+    if (result.code !== 0 && result.stdout.length === 0) {
+      throw new RemoteError(
+        'workspace-review/command-failed',
+        `git show failed for ${JSON.stringify(path)}: ${result.stderr.trim() || `exit ${String(result.code)}`}`,
+        { command: `git show ${oid} -- ${path}`, output: result.stderr },
+      )
+    }
+    const patch = result.stdout.slice(0, this.config.maxDiffBytes)
+    const parsed = parseUnifiedDiff(patch)[0]
+    return {
+      isRepository: true,
+      untracked: false,
+      truncated: result.stdout.length > this.config.maxDiffBytes,
+      file: parsed ?? { path, oldPath: null, binary: false, notice: 'no-body', hunks: [] },
+      patch,
+    }
+  }
+
+  /**
+   * Validate a commit id is a hex object name.
+   * @param {string} oid - The candidate.
+   * @returns {string} The id, unchanged.
+   */
+  oidOf(oid) {
+    if (typeof oid !== 'string' || !/^[0-9a-f]{4,64}$/i.test(oid)) {
+      throw new RemoteError('gateway/bad-request', `invalid commit ${JSON.stringify(oid)}`, {})
+    }
+    return oid
   }
 
   /**

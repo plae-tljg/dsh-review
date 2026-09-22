@@ -60,6 +60,8 @@ export const zh = {
 
   'source.uncommitted': '未提交',
   'source.rounds': '按轮次',
+  'source.commits': '按提交',
+  'commit.empty': '这个仓库还没有提交记录。',
   'round.label': '第 {turn} 轮',
   'round.live': '进行中',
   'round.empty': '这个会话还没有文件改动。',
@@ -125,6 +127,8 @@ export const en = {
 
   'source.uncommitted': 'Uncommitted',
   'source.rounds': 'By round',
+  'source.commits': 'By commit',
+  'commit.empty': 'This repository has no commits yet.',
   'round.label': 'Round {turn}',
   'round.live': 'live',
   'round.empty': 'No file changes in this conversation yet.',

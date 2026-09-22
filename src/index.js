@@ -19,6 +19,7 @@ export {
   buildTree,
   destinationOf,
   headerPath,
+  parseNameStatus,
   parseNumstat,
   parseUnifiedDiff,
   sortFiles,
