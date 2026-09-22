@@ -267,8 +267,12 @@ export function parseUnifiedDiff(patch) {
       continue
     }
 
-    if (hunk === null) {
-      if (!line.startsWith('@@')) continue
+    // A hunk header closes whatever was open and starts the next hunk. Two
+    // hunks are adjacent, so this is checked before the `hunk === null` guard:
+    // otherwise a second header is read as a body line, the first hunk closes
+    // with a stray `@` context row, and the second hunk's body is dropped.
+    if (line.startsWith('@@')) {
+      closeHunk()
       const match = HUNK_HEADER.exec(line)
       if (match === null) continue
       oldCursor = Number(match[1])
@@ -283,6 +287,7 @@ export function parseUnifiedDiff(patch) {
       }
       continue
     }
+    if (hunk === null) continue
 
     const marker = line.slice(0, 1)
     if (marker === '-') {

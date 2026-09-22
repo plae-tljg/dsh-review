@@ -296,3 +296,29 @@ test('buildTree orders directories before files at every level', () => {
 test('buildTree returns nothing for no files', () => {
   assert.deepEqual(buildTree([]), { directories: [], files: [] })
 })
+
+test('parseUnifiedDiff keeps every hunk of one file', () => {
+  // Two hunks are adjacent, so the second `@@` must open a new hunk rather than
+  // be read as a body line; the bug closed the first hunk on it and dropped the
+  // whole second hunk.
+  const patch = [
+    'diff --git a/x.py b/x.py',
+    '--- a/x.py',
+    '+++ b/x.py',
+    '@@ -8,6 +8,7 @@ a(',
+    ' )',
+    ' b',
+    '+d',
+    ' e',
+    ' ',
+    '@@ -54,3 +55,28 @@ def f():',
+    '     if x:',
+    '     return None',
+    '+',
+    '+# meta',
+  ].join('\n')
+  const files = parseUnifiedDiff(patch)
+  assert.equal(files.length, 1)
+  assert.deepEqual(files[0].hunks.map(hunk => hunk.oldStart), [8, 54])
+  assert.ok(files[0].hunks[1].lines.some(line => line.kind === 'add' && line.text === '# meta'))
+})
