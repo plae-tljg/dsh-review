@@ -28,6 +28,8 @@ The look is a deliberate port of **opencode's** right-hand review panel (see [do
 - **A directory tree, not a flat list.** Files group under folders, each folder row carries the totals for everything below it, and a chain of single-child directories is folded into one row (`src/client/`) — the same shape opencode's review pane uses. Root-level files sit beside the tree. A header toggle hides the per-folder aggregates when only the files matter.
 - **A viewer escape hatch.** Every changed file has an **Open in a tab** action in its diff header, which opens the file in the sidebar's own file viewer (the native document preview, or `dsh-better-sidebar`'s editor) so it can be read without the diff decoration.
 - **Word wrap and horizontal scrolling.** A long line scrolls sideways by default; a header toggle turns on word wrap. Both the Uncommitted and the Rounds diff bodies honour it.
+- **Filter and remember.** Every rail carries a sticky filter box that narrows the tree, the rounds or the commits (a commit matches by subject/short hash or by a file it touched). The chosen source, rail width, wrap/fold toggles, filter and open file are remembered per session in `localStorage`, so reopening lands where you left off.
+- **Foldable diffs.** Hunk context is adjustable (3/10/30 lines, re-read from Git); a run of unchanged lines longer than six folds behind one `N unchanged lines` row, and an expand-all control opens every fold at once.
 - **Every uncommitted change**, staged, unstaged and untracked, from `git status --porcelain=v1 -z`.
 - **Per-file counts** from `git diff --numstat -z`, with a binary change marked `bin` rather than `+0 -0`, plus the **grand total** across the report.
 - **A real unified diff**, parsed on the Host into hunks: context lines appear once, additions and deletions each carry their own gutter number, and every hunk opens with its `@@ -a,b +c,d @@` coordinates.
@@ -126,6 +128,7 @@ Deployment caps are the service's Cordis config:
 - **Desktop split only.** The list and the diff sit side by side above 520px and stack below it; there is no draggable divider.
 - **No word-level highlighting** and **no line comments** (opencode's inline-comment affordance is not ported).
 - **The Files editor is a plain textarea** (no syntax highlighting; the browser's own undo applies). Binary and truncation-capped files are read-only.
+- **View state is per browser profile.** It lives in `localStorage` under the session id; clearing site data (or a private window) resets the source, width, filter and selections.
 - **Mode-only changes state no body** — a permission change appears with its counts and reads "no text".
 
 ## References

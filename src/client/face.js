@@ -110,12 +110,12 @@ export function reviewFace(remote, getConversation) {
      * @param {string} path - The path to read.
      * @param {AbortSignal} signal - The tab record's lifetime.
      */
-    const loadDiff = (tabId, path, signal) => {
+    const loadDiff = (tabId, path, context, signal) => {
       if (signal.aborted) return
       const key = `${tabId}\u0000${path}`
       const generation = claim(diffGenerations, key)
       actions.diffLoading(tabId, path)
-      void withDeadline(remote.workspaceReview.diff(sessionId, path, signal), READ_TIMEOUT_MS).then((result) => {
+      void withDeadline(remote.workspaceReview.diff(sessionId, path, context, signal), READ_TIMEOUT_MS).then((result) => {
         if (diffGenerations.get(key) !== generation) return
         if (result.ok) actions.diffLoaded(tabId, path, result.value)
         else actions.diffFailed(tabId, path, result.error.code, result.error.message)
@@ -164,12 +164,12 @@ export function reviewFace(remote, getConversation) {
      * @param {string} path - The path to read.
      * @param {AbortSignal} signal - The tab record's lifetime.
      */
-    const loadCommitDiff = (tabId, oid, path, signal) => {
+    const loadCommitDiff = (tabId, oid, path, context, signal) => {
       if (signal.aborted) return
       const key = `commitDiff\u0000${tabId}\u0000${oid}\u0000${path}`
       const generation = claim(diffGenerations, key)
       actions.commitDiffLoading(tabId, oid, path)
-      void withDeadline(remote.workspaceReview.commitDiff(sessionId, oid, path, signal), READ_TIMEOUT_MS).then((result) => {
+      void withDeadline(remote.workspaceReview.commitDiff(sessionId, oid, path, context, signal), READ_TIMEOUT_MS).then((result) => {
         if (diffGenerations.get(key) !== generation) return
         if (result.ok) actions.commitDiffLoaded(tabId, oid, path, result.value)
         else actions.commitDiffFailed(tabId, oid, path, result.error.code, result.error.message)
@@ -247,12 +247,12 @@ export function reviewFace(remote, getConversation) {
       refresh(tabId, signal) {
         load(tabId, signal)
       },
-      select(tabId, path, held, signal) {
+      select(tabId, path, held, context, signal) {
         actions.select(tabId, path)
-        if (!held) loadDiff(tabId, path, signal)
+        if (!held) loadDiff(tabId, path, context, signal)
       },
-      open(tabId, path, signal) {
-        loadDiff(tabId, path, signal)
+      open(tabId, path, context, signal) {
+        loadDiff(tabId, path, context, signal)
       },
       listCommits(tabId, signal) {
         loadCommits(tabId, signal)
@@ -260,8 +260,8 @@ export function reviewFace(remote, getConversation) {
       openCommit(tabId, oid, signal) {
         loadCommit(tabId, oid, signal)
       },
-      openCommitDiff(tabId, oid, path, signal) {
-        loadCommitDiff(tabId, oid, path, signal)
+      openCommitDiff(tabId, oid, path, context, signal) {
+        loadCommitDiff(tabId, oid, path, context, signal)
       },
       listFiles(tabId, signal) {
         loadFiles(tabId, signal)

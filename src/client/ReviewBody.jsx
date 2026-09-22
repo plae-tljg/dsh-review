@@ -22,6 +22,7 @@ import { FileTypeIcon } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import css from './ReviewBody.module.css'
 import { deriveRounds, lineDiff } from './rounds.js'
+import { loadView, saveView } from './view-state.js'
 
 /** The single letter a status shows, matching Git's own porcelain vocabulary. */
 const STATUS_LETTER = {
@@ -40,6 +41,9 @@ const EMPTY_TREE = { directories: [], files: [] }
 
 /** A map with nothing in it, for the same reason. */
 const EMPTY_STATE = {}
+
+/** A list with nothing in it, for the same reason. */
+const EMPTY_LIST = []
 
 /** The basename of a repository path. */
 function baseName(path) {
@@ -77,6 +81,59 @@ function directoryPaths(nodes, into = new Set()) {
     directoryPaths(node.directories, into)
   }
   return into
+}
+
+/**
+ * The paths a case-insensitive substring query admits, across a whole tree.
+ * @param {{ directories: any[], files: any[] }} tree - A report tree.
+ * @param {string} query - The lower-cased query (empty admits everything).
+ * @returns {Set<string>} The matching file paths.
+ */
+function matchingPaths(tree, query) {
+  const keep = new Set()
+  const walk = (nodes) => {
+    for (const node of nodes) {
+      for (const file of node.files) if (file.path.toLowerCase().includes(query)) keep.add(file.path)
+      walk(node.directories)
+    }
+  }
+  walk(tree.directories)
+  for (const file of tree.files) if (file.path.toLowerCase().includes(query)) keep.add(file.path)
+  return keep
+}
+
+/**
+ * Keep only the files a query admits, dropping every directory left empty.
+ * @param {{ directories: any[], files: any[] }} tree - A report tree.
+ * @param {string} query - The lower-cased query.
+ * @returns {{ directories: any[], files: any[] }} The pruned tree.
+ */
+function filterTree(tree, query) {
+  if (query === '') return tree
+  const keep = matchingPaths(tree, query)
+  return { directories: pruneTree(tree.directories, keep), files: tree.files.filter(file => keep.has(file.path)) }
+}
+
+/**
+ * The left rail's file filter.
+ * @param {object} props - The value and change handler.
+ * @returns {import('react').ReactNode} The sticky filter row.
+ */
+function FilterBox({ value, onChange, t }) {
+  return (
+    <div className={css.filterBox}>
+      <input
+        type="search"
+        className={css.filterInput}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={t('filter.placeholder')}
+        aria-label={t('filter.placeholder')}
+        spellCheck={false}
+        data-review-filter
+      />
+    </div>
+  )
 }
 
 /**
@@ -265,12 +322,78 @@ function DirectoryRows({ node, depth, selected, collapsed, showCounts, plain, on
   )
 }
 
+/** A run of unchanged lines longer than this folds behind one row. */
+const FOLD_MIN = 6
+
+/** One numbered diff line. */
+function DiffLine({ line }) {
+  return (
+    <div className={css.line} data-kind={line.kind}>
+      <span className={css.gutter}>{line.oldNumber ?? ''}</span>
+      <span className={css.gutter}>{line.newNumber ?? ''}</span>
+      <span className={css.marker}>{line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}</span>
+      <span className={css.text}>{line.text === '' ? '\u00a0' : line.text}</span>
+    </div>
+  )
+}
+
 /**
- * One unified-diff hunk the Host parsed: its `@@` header and numbered lines.
+ * Split lines into rows, collapsing a long run of unchanged lines.
+ * @param {any[]} lines - Lines in order, each with a `kind`.
+ * @returns {Array<{ type: 'line'|'gap', line?: any, lines?: any[] }>} The rows.
+ */
+function foldContext(lines) {
+  const rows = []
+  let at = 0
+  while (at < lines.length) {
+    if (lines[at].kind === 'ctx') {
+      let end = at
+      while (end < lines.length && lines[end].kind === 'ctx') end += 1
+      const run = lines.slice(at, end)
+      if (run.length > FOLD_MIN) rows.push({ type: 'gap', lines: run })
+      else for (const line of run) rows.push({ type: 'line', line })
+      at = end
+      continue
+    }
+    rows.push({ type: 'line', line: lines[at] })
+    at += 1
+  }
+  return rows
+}
+
+/**
+ * A hunk's lines, with each long unchanged run folded behind a clickable row.
+ * @param {object} props - The lines, the global expand flag, and the translator.
+ * @returns {import('react').ReactNode} The rows.
+ */
+function HunkRows({ lines, expandAll, t }) {
+  const [expanded, setExpanded] = useState(() => new Set())
+  const rows = useMemo(() => foldContext(lines), [lines])
+  return rows.map((row, index) => {
+    if (row.type === 'line') return <DiffLine key={index} line={row.line} />
+    if (expandAll || expanded.has(index)) {
+      return row.lines.map((line, inner) => <DiffLine key={`${String(index)}-${String(inner)}`} line={line} />)
+    }
+    return (
+      <button
+        type="button"
+        className={css.gap}
+        key={index}
+        onClick={() => setExpanded((current) => new Set(current).add(index))}
+        data-review-gap
+      >
+        {t('diff.fold', { count: String(row.lines.length) })}
+      </button>
+    )
+  })
+}
+
+/**
+ * One unified-diff hunk the Host parsed: its `@@` header and its lines.
  * @param {object} props - Hunk props.
  * @returns {import('react').ReactNode} The hunk.
  */
-function Hunk({ hunk }) {
+function Hunk({ hunk, expandAll, t }) {
   const coordinates = `@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart},${hunk.newCount} @@`
   return (
     <div className={css.hunk}>
@@ -278,14 +401,7 @@ function Hunk({ hunk }) {
         <span className={css.hunkCoordinates}>{coordinates}</span>
         {hunk.header !== '' && <span className={css.hunkContext}>{hunk.header}</span>}
       </div>
-      {hunk.lines.map((line, index) => (
-        <div className={css.line} data-kind={line.kind} key={`${line.oldNumber ?? ''}:${line.newNumber ?? ''}:${index}`}>
-          <span className={css.gutter}>{line.oldNumber ?? ''}</span>
-          <span className={css.gutter}>{line.newNumber ?? ''}</span>
-          <span className={css.marker}>{line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}</span>
-          <span className={css.text}>{line.text === '' ? '\u00a0' : line.text}</span>
-        </div>
-      ))}
+      <HunkRows lines={hunk.lines} expandAll={expandAll} t={t} />
     </div>
   )
 }
@@ -295,7 +411,8 @@ function Hunk({ hunk }) {
  * @param {object} props - Body props.
  * @returns {import('react').ReactNode} The diff.
  */
-function DiffBody({ state, path, t, wrap, onOpen }) {
+function DiffBody({ state, path, t, wrap, onOpen, context, onContext }) {
+  const [expandAll, setExpandAll] = useState(false)
   const copy = useCallback(() => {
     if (state.kind !== 'ready' || state.diff.patch === '') return
     void navigator.clipboard?.writeText(state.diff.patch)
@@ -315,6 +432,31 @@ function DiffBody({ state, path, t, wrap, onOpen }) {
       <div className={css.diffHead}>
         {file !== null && file.oldPath !== null && <span className={css.renameFrom}>{file.oldPath} → </span>}
         <span className={css.diffPath}>{path}</span>
+        {file !== null && file.hunks.length > 0 && (
+          <>
+            <label className={css.contextControl} title={t('diff.context')}>
+              <span>{t('diff.context')}</span>
+              <select
+                className={css.contextSelect}
+                value={String(context)}
+                onChange={(event) => onContext(Number(event.target.value))}
+                data-review-context
+              >
+                <option value="3">3</option>
+                <option value="10">10</option>
+                <option value="30">30</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              className={css.copy}
+              onClick={() => setExpandAll((value) => !value)}
+              data-review-expandall
+            >
+              {expandAll ? t('collapseAll') : t('expandAll')}
+            </button>
+          </>
+        )}
         {onOpen !== undefined && (
           <button type="button" className={css.copy} onClick={() => onOpen(path)} title={t('diff.open')} data-review-open>
             {t('diff.open')}
@@ -332,7 +474,7 @@ function DiffBody({ state, path, t, wrap, onOpen }) {
         ? <p className={css.notice}>{t('diff.empty')}</p>
         : file.hunks.length === 0
           ? <p className={css.notice}>{file.binary ? t('diff.binary') : file.notice === 'empty-file' ? t('diff.empty') : t('diff.noBody')}</p>
-          : file.hunks.map((hunk, index) => <Hunk hunk={hunk} key={`${hunk.oldStart}:${hunk.newStart}:${index}`} />)}
+          : file.hunks.map((hunk, index) => <Hunk hunk={hunk} expandAll={expandAll} t={t} key={`${hunk.oldStart}:${hunk.newStart}:${index}`} />)}
     </div>
   )
 }
@@ -345,11 +487,35 @@ function DiffBody({ state, path, t, wrap, onOpen }) {
  * @param {object} props - Body props.
  * @returns {import('react').ReactNode} The diff.
  */
+/** Number a round's context-free rows with sequential old/new line numbers. */
+function numberLines(rows) {
+  let oldNumber = 1
+  let newNumber = 1
+  return rows.map(row => {
+    const oldCell = row.kind === 'add' ? null : oldNumber
+    const newCell = row.kind === 'del' ? null : newNumber
+    if (row.kind !== 'add') oldNumber += 1
+    if (row.kind !== 'del') newNumber += 1
+    return { kind: row.kind, text: row.text, oldNumber: oldCell, newNumber: newCell }
+  })
+}
+
 function RoundDiffBody({ round, file, t, wrap, onOpen }) {
+  const [expandAll, setExpandAll] = useState(false)
   const head = (
     <div className={css.diffHead}>
       <span className={css.renameFrom}>{t('round.label', { turn: String(round.turn) })} · </span>
       <span className={css.diffPath}>{file.path}</span>
+      {file.hunks.length > 0 && (
+        <button
+          type="button"
+          className={css.copy}
+          onClick={() => setExpandAll((value) => !value)}
+          data-review-expandall
+        >
+          {expandAll ? t('collapseAll') : t('expandAll')}
+        </button>
+      )}
       {onOpen !== undefined && (
         <button type="button" className={css.copy} onClick={() => onOpen(file.path)} title={t('diff.open')} data-review-open>
           {t('diff.open')}
@@ -376,32 +542,14 @@ function RoundDiffBody({ round, file, t, wrap, onOpen }) {
   return (
     <div className={css.diffScroll} data-wrap={wrap ? 'on' : 'off'} data-review-round-diff={file.path}>
       {head}
-      {file.hunks.map((hunk, index) => {
-        const rows = lineDiff(hunk.oldText, hunk.newText)
-        let oldNumber = 1
-        let newNumber = 1
-        return (
-          <div className={css.hunk} key={index}>
-            <div className={css.hunkHeader}>
-              <span className={css.hunkCoordinates}>{t('round.hunk', { index: String(index + 1) })}</span>
-            </div>
-            {rows.map((row, at) => {
-              const oldCell = row.kind === 'add' ? null : oldNumber
-              const newCell = row.kind === 'del' ? null : newNumber
-              if (row.kind !== 'add') oldNumber += 1
-              if (row.kind !== 'del') newNumber += 1
-              return (
-                <div className={css.line} data-kind={row.kind} key={at}>
-                  <span className={css.gutter}>{oldCell ?? ''}</span>
-                  <span className={css.gutter}>{newCell ?? ''}</span>
-                  <span className={css.marker}>{row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' '}</span>
-                  <span className={css.text}>{row.text === '' ? '\u00a0' : row.text}</span>
-                </div>
-              )
-            })}
+      {file.hunks.map((hunk, index) => (
+        <div className={css.hunk} key={index}>
+          <div className={css.hunkHeader}>
+            <span className={css.hunkCoordinates}>{t('round.hunk', { index: String(index + 1) })}</span>
           </div>
-        )
-      })}
+          <HunkRows lines={numberLines(lineDiff(hunk.oldText, hunk.newText))} expandAll={expandAll} t={t} />
+        </div>
+      ))}
     </div>
   )
 }
@@ -482,6 +630,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   // opens or closes a folder, and the default is derived from the tree.
   const [filesCollapsed, setFilesCollapsed] = useState(null)
   const [listWidth, setListWidth] = useState(260)
+  const [filter, setFilter] = useState('')
   const listDrag = useRef(null)
   // Opening a file in a viewer tab: the panel supplies its own opener, while
   // the native seat builds a `dsh-resource://file` address for the session and
@@ -514,6 +663,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   )
 
   const source = state?.source ?? 'git'
+  const context = state?.context ?? 3
   const report = state?.report
   const summary = report?.kind === 'ready' ? report.report : undefined
   const files = summary?.files ?? []
@@ -532,6 +682,18 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
       files: summary.tree.files.filter(file => visible.has(file.path)),
     }
   }, [summary, files, filterStaged])
+  const query = filter.trim().toLowerCase()
+  const visibleTree = useMemo(() => filterTree(tree, query), [tree, query])
+  const shownRounds = useMemo(() => {
+    if (query === '') return rounds
+    const kept = []
+    for (const round of rounds) {
+      const keep = new Set(round.files.filter(file => file.path.toLowerCase().includes(query)).map(file => file.path))
+      if (keep.size === 0) continue
+      kept.push({ ...round, tree: { directories: pruneTree(round.tree.directories, keep), files: round.tree.files.filter(file => keep.has(file.path)) } })
+    }
+    return kept
+  }, [rounds, query])
   const selected = state?.selected ?? null
   const held = selected === null ? undefined : state?.diffs[selected]
 
@@ -559,6 +721,15 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   const commitOid = state?.commitOid ?? null
   const commitPath = state?.commitPath ?? null
   const [expandedCommits, setExpandedCommits] = useState(() => new Set())
+  const commitList = commitsState?.kind === 'ready' ? commitsState.report.commits : EMPTY_LIST
+  const shownCommits = useMemo(() => {
+    if (query === '') return commitList
+    return commitList.filter(commit => {
+      if (`${commit.subject} ${commit.short} ${commit.oid}`.toLowerCase().includes(query)) return true
+      const files = commitFiles[commit.oid]
+      return files?.kind === 'ready' && files.report.files.some(file => file.path.toLowerCase().includes(query))
+    })
+  }, [commitList, commitFiles, query])
 
   // Read the commit list the first time the Commit source is shown.
   useEffect(() => {
@@ -579,8 +750,8 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   useEffect(() => {
     if (source !== 'commits' || signal.aborted) return
     if (commitOid === null || commitPath === null) return
-    if (commitDiffs[`${commitOid}\u0000${commitPath}`] === undefined) openCommitDiff(tab.id, commitOid, commitPath, signal)
-  }, [source, commitOid, commitPath, commitDiffs, tab.id, signal, openCommitDiff])
+    if (commitDiffs[`${commitOid}\u0000${commitPath}`] === undefined) openCommitDiff(tab.id, commitOid, commitPath, context, signal)
+  }, [source, commitOid, commitPath, commitDiffs, tab.id, context, signal, openCommitDiff])
 
   const onToggleCommit = useCallback((oid) => {
     setExpandedCommits((current) => {
@@ -595,6 +766,10 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   // ── Files-view state and reads ───────────────────────────────────────────
   const filesState = state?.files
   const filesReport = filesState?.kind === 'ready' ? filesState.report : undefined
+  const filesVisibleTree = useMemo(
+    () => (filesReport === undefined ? EMPTY_TREE : filterTree(filesReport.tree, query)),
+    [filesReport, query],
+  )
   const fileContent = state?.fileContent ?? EMPTY_STATE
   const filePath = state?.filePath ?? null
   const fileDraft = state?.fileDraft ?? null
@@ -635,8 +810,8 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   // dependency so a body cleared by a refresh is read again.
   useEffect(() => {
     if (selected === null || held !== undefined || signal.aborted) return
-    open(tab.id, selected, signal)
-  }, [selected, held, tab.id, signal, open])
+    open(tab.id, selected, context, signal)
+  }, [selected, held, tab.id, context, signal, open])
 
   if (state === undefined) return null
 
@@ -658,6 +833,51 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   )
 
   const onRefresh = () => { refresh(tab.id, signal) }
+
+  // ── View-state persistence ───────────────────────────────────────────────
+  // Restore once per session, then mirror every change back (debounced).
+  const restoredView = useRef(false)
+  useEffect(() => {
+    if (restoredView.current || sessionId === undefined || state === undefined) return
+    restoredView.current = true
+    const view = loadView(sessionId)
+    if (typeof view.listWidth === 'number') setListWidth(view.listWidth)
+    if (typeof view.wrap === 'boolean') setWrap(view.wrap)
+    if (typeof view.folderCounts === 'boolean') setFolderCounts(view.folderCounts)
+    if (typeof view.filter === 'string') setFilter(view.filter)
+    if (Array.isArray(view.collapsed)) setCollapsed(new Set(view.collapsed))
+    if (view.filesCollapsed === null) setFilesCollapsed(null)
+    else if (Array.isArray(view.filesCollapsed)) setFilesCollapsed(new Set(view.filesCollapsed))
+    if (Array.isArray(view.expandedCommits)) setExpandedCommits(new Set(view.expandedCommits))
+    if (typeof view.source === 'string') actions.setSource(tab.id, view.source)
+    if (typeof view.context === 'number') actions.setContext(tab.id, view.context)
+    if (typeof view.git === 'string') select(tab.id, view.git, false, view.context ?? 3, signal)
+    if (Array.isArray(view.round) && view.round[0] !== null) actions.selectRound(tab.id, view.round[0], view.round[1])
+    if (Array.isArray(view.commit) && view.commit[0] !== null) actions.selectCommit(tab.id, view.commit[0], view.commit[1])
+    if (typeof view.file === 'string') actions.selectFile(tab.id, view.file)
+  }, [sessionId, state, tab.id, signal, actions, select])
+
+  useEffect(() => {
+    if (sessionId === undefined || state === undefined) return
+    const timer = setTimeout(() => {
+      saveView(sessionId, {
+        source: state.source ?? 'git',
+        context: state.context ?? 3,
+        listWidth,
+        wrap,
+        folderCounts,
+        filter,
+        collapsed: [...collapsed],
+        filesCollapsed: filesCollapsed === null ? null : [...filesCollapsed],
+        expandedCommits: [...expandedCommits],
+        git: state.selected ?? null,
+        round: [state.roundTurn ?? null, state.roundPath ?? null],
+        commit: [state.commitOid ?? null, state.commitPath ?? null],
+        file: state.filePath ?? null,
+      })
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [sessionId, state, listWidth, wrap, folderCounts, filter, collapsed, filesCollapsed, expandedCommits])
 
   const splitStyle = { '--review-list-width': `${String(listWidth)}px` }
   const dividerProps = {
@@ -712,10 +932,10 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
         </span>
       )}
       {source === 'git' && summary !== undefined && (
-        <CollapseButton directories={tree.directories} collapsed={collapsed} onCollapse={setCollapsed} t={t} />
+        <CollapseButton directories={visibleTree.directories} collapsed={collapsed} onCollapse={setCollapsed} t={t} />
       )}
       {source === 'files' && filesReport !== undefined && (
-        <CollapseButton directories={filesReport.tree.directories} collapsed={filesCollapsedSet} onCollapse={setFilesCollapsed} t={t} />
+        <CollapseButton directories={filesVisibleTree.directories} collapsed={filesCollapsedSet} onCollapse={setFilesCollapsed} t={t} />
       )}
       <button
         type="button"
@@ -804,6 +1024,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
           : (
             <div className={css.split} style={splitStyle}>
               <div className={css.list}>
+                <FilterBox value={filter} onChange={setFilter} t={t} />
                 {stagedPaths.length > 0 && (
                   <button
                     type="button"
@@ -816,7 +1037,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                     {t('staged')}
                   </button>
                 )}
-                {tree.directories.map(node => (
+                {visibleTree.directories.map(node => (
                   <DirectoryRows
                     key={node.path}
                     node={node}
@@ -825,11 +1046,11 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                     collapsed={collapsed}
                     showCounts={folderCounts}
                     onToggle={onToggle}
-                    onSelect={(path) => { select(tab.id, path, state.diffs[path] !== undefined, signal) }}
+                    onSelect={(path) => { select(tab.id, path, state.diffs[path] !== undefined, context, signal) }}
                     t={t}
                   />
                 ))}
-                {tree.files.map(file => (
+                {visibleTree.files.map(file => (
                   <FileRow
                     key={file.path}
                     file={file}
@@ -847,7 +1068,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                   ? <p className={css.notice}>{t('diff.select')}</p>
                   : held === undefined
                     ? <p className={css.notice}>{t('refreshing')}</p>
-                    : <DiffBody state={held} path={selected} t={t} wrap={wrap} onOpen={openInTab} />}
+                    : <DiffBody state={held} path={selected} t={t} wrap={wrap} onOpen={openInTab} context={context} onContext={(value) => actions.setContext(tab.id, value)} />}
               </div>
             </div>
           )}
@@ -881,7 +1102,8 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
         {filesState.report.truncated && <p className={css.hint}>{t('truncated')}</p>}
         <div className={css.split} style={splitStyle}>
           <div className={css.list}>
-            {filesState.report.tree.directories.map(node => (
+            <FilterBox value={filter} onChange={setFilter} t={t} />
+            {filesVisibleTree.directories.map(node => (
               <DirectoryRows
                 key={node.path}
                 node={node}
@@ -895,7 +1117,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                 t={t}
               />
             ))}
-            {filesState.report.tree.files.map(file => (
+            {filesVisibleTree.files.map(file => (
               <FileRow
                 key={file.path}
                 file={file}
@@ -954,12 +1176,19 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
     if (!commitsState.report.isRepository) {
       return <div className={css.root} data-review-state="not-repository">{header}<p className={css.notice}>{t('notRepository')}</p></div>
     }
-    const commitList = commitsState.report.commits
     if (commitList.length === 0) {
       return (
         <div className={css.root} data-review-state="commits-empty">
           {header}
           <div className={css.empty}><p className={css.emptyTitle}>{t('commit.empty')}</p></div>
+        </div>
+      )
+    }
+    if (shownCommits.length === 0) {
+      return (
+        <div className={css.root} data-review-state="commits-empty">
+          {header}
+          <div className={css.empty}><p className={css.emptyTitle}>{t('filter.empty')}</p></div>
         </div>
       )
     }
@@ -971,10 +1200,12 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
         {header}
         <div className={css.split} style={splitStyle}>
           <div className={css.list}>
-            {commitList.map(commit => {
+            <FilterBox value={filter} onChange={setFilter} t={t} />
+            {shownCommits.map(commit => {
               const open = expandedCommits.has(commit.oid)
               const files = commitFiles[commit.oid]
               const report = files?.kind === 'ready' ? files.report : undefined
+              const tree = report === undefined ? undefined : filterTree(report.tree, query)
               return (
                 <div key={commit.oid} data-review-commit={commit.oid}>
                   <button
@@ -1005,7 +1236,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                           ? <p className={css.notice}>{t('error.unavailable', { message: files.message })}</p>
                           : (
                             <>
-                              {files.report.tree.directories.map(node => (
+                              {tree.directories.map(node => (
                                 <DirectoryRows
                                   key={node.path}
                                   node={node}
@@ -1018,7 +1249,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                                   t={t}
                                 />
                               ))}
-                              {files.report.tree.files.map(file => (
+                              {tree.files.map(file => (
                                 <FileRow
                                   key={file.path}
                                   file={file}
@@ -1057,16 +1288,17 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   return (
     <div className={css.root} data-review-state="rounds">
       {header}
-      {rounds.length === 0
+      {shownRounds.length === 0
         ? (
           <div className={css.empty} data-review-state="rounds-empty">
-            <p className={css.emptyTitle}>{t('round.empty')}</p>
+            <p className={css.emptyTitle}>{query === '' ? t('round.empty') : t('filter.empty')}</p>
           </div>
         )
         : (
           <div className={css.split} style={splitStyle}>
             <div className={css.list}>
-              {rounds.map(round => {
+              <FilterBox value={filter} onChange={setFilter} t={t} />
+              {shownRounds.map(round => {
                 const open = !turnCollapsed.has(round.turn)
                 return (
                   <div key={round.turn} data-review-turn={round.turn}>
@@ -1115,7 +1347,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                   </div>
                 )
               })}
-              <p className={css.count}>{t('files.count', { count: String(rounds.length) })}</p>
+              <p className={css.count}>{t('files.count', { count: String(shownRounds.length) })}</p>
             </div>
             <div className={css.divider} role="separator" aria-orientation="vertical" {...dividerProps} />
           <div className={css.body}>

@@ -248,6 +248,38 @@ test('the diff header opens the file and defaults to no wrap', async () => {
   assert.match(html, /data-wrap="off"/)
   assert.match(html, /data-kind="del"/)
   assert.match(html, /data-kind="add"/)
+  // The context-size control travels with a diff that has hunks.
+  assert.match(html, /data-review-context/)
+})
+
+test('a long unchanged run folds behind a gap row', async () => {
+  const context = Array.from({ length: 10 }, (_, index) => ({
+    kind: 'ctx', text: `line ${String(index)}`, oldNumber: index + 1, newNumber: index + 1,
+  }))
+  const diff = {
+    untracked: false,
+    truncated: false,
+    patch: 'x',
+    file: {
+      path: 'a.txt',
+      oldPath: null,
+      binary: false,
+      notice: null,
+      hunks: [{
+        header: '',
+        oldStart: 1,
+        newStart: 1,
+        oldCount: 11,
+        newCount: 12,
+        lines: [...context, { kind: 'add', text: 'new', oldNumber: null, newNumber: 11 }],
+      }],
+    },
+  }
+  const html = await renderBody(reportFixture(), {
+    diffs: { 'src/client/ReviewBody.tsx': { kind: 'ready', diff } },
+  })
+  assert.match(html, /data-review-gap/)
+  assert.match(html, /diff\.fold/)
 })
 
 test('the body indents a nested row deeper than its folder', async () => {

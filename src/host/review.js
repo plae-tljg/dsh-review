@@ -287,10 +287,11 @@ export class WorkspaceReview extends TypertRemoteService {
    * reported as additions.
    * @param {object} agent - Target Agent resolved from the Session identity on the wire.
    * @param {string} path - Repository-relative path from a `changes` row.
+   * @param {number} [context] - Lines of unchanged context each hunk carries.
    * @param {AbortSignal} signal - Caller cancellation.
    * @returns {Promise<object>} The parsed diff.
    */
-  async diff(agent, path, signal) {
+  async diff(agent, path, context, signal) {
     const root = this.rootOf(agent)
     if (typeof path !== 'string' || path.length === 0 || path.startsWith('/') || path.includes('\0')) {
       throw new RemoteError('gateway/bad-request', `invalid path ${JSON.stringify(path)}`, {})
@@ -310,7 +311,7 @@ export class WorkspaceReview extends TypertRemoteService {
     // as an addition of its whole content.
     const paths = source === null ? [path] : [source, path]
     let result = await run(this.git(root, [
-      'diff', '--no-color', '--no-ext-diff', '--find-renames',
+      'diff', '--no-color', '--no-ext-diff', '--find-renames', `-U${this.contextOf(context)}`,
       ...(unborn ? ['--cached'] : ['HEAD']), '--', ...paths.map(quote),
     ]), signal)
     let untracked = false
@@ -434,17 +435,18 @@ export class WorkspaceReview extends TypertRemoteService {
    * @param {object} agent - Target Agent resolved from the Session identity on the wire.
    * @param {string} oid - The commit to read.
    * @param {string} path - Repository-relative path from a `commitChanges` row.
+   * @param {number} [context] - Lines of unchanged context each hunk carries.
    * @param {AbortSignal} signal - Caller cancellation.
    * @returns {Promise<object>} The parsed diff, shaped like `diff`.
    */
-  async commitDiff(agent, oid, path, signal) {
+  async commitDiff(agent, oid, path, context, signal) {
     const root = this.rootOf(agent)
     this.oidOf(oid)
     if (typeof path !== 'string' || path.length === 0 || path.startsWith('/') || path.includes('\0')) {
       throw new RemoteError('gateway/bad-request', `invalid path ${JSON.stringify(path)}`, {})
     }
     const result = await run(this.git(root, [
-      'show', '--no-color', '--no-ext-diff', '--find-renames', '--format=', oid, '--', quote(path),
+      'show', '--no-color', '--no-ext-diff', '--find-renames', `-U${this.contextOf(context)}`, '--format=', oid, '--', quote(path),
     ]), signal)
     if (result.code !== 0 && result.stdout.length === 0) {
       throw new RemoteError(
@@ -592,6 +594,16 @@ export class WorkspaceReview extends TypertRemoteService {
       throw new RemoteError('gateway/bad-request', `invalid commit ${JSON.stringify(oid)}`, {})
     }
     return oid
+  }
+
+  /**
+   * Clamp a requested hunk-context size onto a small, safe range.
+   * @param {number|undefined} context - The requested lines of context.
+   * @returns {number} Lines of context (default 3).
+   */
+  contextOf(context) {
+    const value = typeof context === 'number' && Number.isFinite(context) ? Math.trunc(context) : 3
+    return Math.min(200, Math.max(0, value))
   }
 
   /**

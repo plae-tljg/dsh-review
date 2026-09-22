@@ -195,6 +195,12 @@ export const TYPERT_REMOTE = {
             schema: z.string(),
           },
         },
+        {
+          name: 'context',
+          wire: 'context',
+          source: 'json',
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewContext', schema: z.number() },
+        },
       ],
       cancellation: { parameter: 'signal' },
       result: {
@@ -261,6 +267,12 @@ export const TYPERT_REMOTE = {
           wire: 'path',
           source: 'json',
           codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewPath', schema: z.string() },
+        },
+        {
+          name: 'context',
+          wire: 'context',
+          source: 'json',
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewContext', schema: z.number() },
         },
       ],
       cancellation: { parameter: 'signal' },

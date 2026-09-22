@@ -56,6 +56,7 @@ export function createReviewStore() {
           diffs: {},
           selected: null,
           staged: {},
+          context: 3,
           source: 'git',
           roundTurn: null,
           roundPath: null,
@@ -81,6 +82,20 @@ export function createReviewStore() {
       setSource: (draft, tabId, source) => {
         const tab = draft.byTab[tabId]
         if (tab !== undefined) tab.source = source
+      },
+      /**
+       * Change the hunk-context size; the cached diff bodies are dropped so the
+       * open file is read again at the new size.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {number} context - Lines of unchanged context.
+       */
+      setContext: (draft, tabId, context) => {
+        const tab = draft.byTab[tabId]
+        if (tab === undefined) return
+        tab.context = context
+        tab.diffs = {}
+        tab.commitDiffs = {}
       },
       /**
        * Open one round's file.

@@ -232,6 +232,31 @@
   min-width: 0;
 }
 
+/* The filter row sticks to the top of the scrolling rail. */
+.filterBox {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0 0 6px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.filterInput {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  padding: 3px 8px;
+  font: var(--dsw-font-xxxs-11);
+  outline: none;
+}
+
+.filterInput:focus {
+  border-color: var(--dsw-alias-border-l3, var(--dsw-alias-border-l2));
+}
+
 /* ── tree rows ──────────────────────────────────────────────────────────── */
 
 /* Both row kinds share one shape, following opencode's file tree: a 28px row
@@ -547,6 +572,45 @@
 .line[data-kind='del'] .marker,
 .line[data-kind='del'] .text {
   color: var(--dsw-alias-state-error-primary);
+}
+
+/* A folded run of unchanged lines. */
+.gap {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-markdown-code-block-banner, transparent);
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  padding: 3px 10px;
+  font: var(--dsw-font-xxxs-11);
+  text-align: left;
+}
+
+.gap:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The hunk-context size control in a diff header. */
+.contextControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.contextSelect {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxxs-11);
+  padding: 1px 2px;
 }
 
 /* ── notices ────────────────────────────────────────────────────────────── */

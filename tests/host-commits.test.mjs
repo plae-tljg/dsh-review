@@ -75,7 +75,7 @@ test('commitChanges and commitDiff read one commit', async () => {
     assert.deepEqual(report.files.map(file => [file.path, file.status, file.added]), [['a.txt', 'modified', 1]])
     assert.equal(report.added, 1)
     assert.equal(report.removed, 0)
-    const diff = await service.commitDiff({ session: {} }, head.oid, 'a.txt', new AbortController().signal)
+    const diff = await service.commitDiff({ session: {} }, head.oid, 'a.txt', 3, new AbortController().signal)
     assert.ok(diff.file.hunks.length >= 1)
     assert.ok(diff.file.hunks[0].lines.some(line => line.kind === 'add' && line.text === 'two'))
   })
