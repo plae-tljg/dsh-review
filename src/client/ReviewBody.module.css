@@ -556,3 +556,56 @@
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-xs-12);
 }
+
+/* ── files view ─────────────────────────────────────────────────────────── */
+
+.fileText {
+  margin: 0;
+  padding: 10px 12px;
+  font: var(--dsw-font-markdown-code-block);
+  white-space: pre;
+  color: var(--dsw-alias-label-primary);
+}
+
+.diffScroll[data-wrap='on'] .fileText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.editorStatus {
+  flex: none;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-12);
+}
+
+.editorStatus[data-review-save='failed'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.editorStatus[data-review-save='saved'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.textarea {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-markdown-code-block);
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+}

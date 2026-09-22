@@ -64,6 +64,12 @@ export function createReviewStore() {
           commitDiffs: {},
           commitOid: null,
           commitPath: null,
+          files: { kind: 'idle' },
+          fileContent: {},
+          filePath: null,
+          fileDraft: null,
+          editMode: false,
+          fileSave: { kind: 'idle' },
         }
       },
       /**
@@ -200,6 +206,139 @@ export function createReviewStore() {
         if (tab === undefined) return
         tab.commitOid = oid
         tab.commitPath = path
+      },
+      /**
+       * Mark the workspace file tree as being read.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       */
+      filesLoading: (draft, tabId) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.files = { kind: 'loading' }
+      },
+      /**
+       * Record the workspace file tree.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {object} report - The `listFiles` result the Host sent.
+       */
+      filesLoaded: (draft, tabId, report) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.files = { kind: 'ready', report }
+      },
+      /**
+       * Record why the workspace file tree could not be read.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} code - The Remote failure code.
+       * @param {string} message - The Remote failure message.
+       */
+      filesFailed: (draft, tabId, code, message) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.files = { kind: 'failed', code, message }
+      },
+      /**
+       * Mark one file's content as being read.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} path - The file being read.
+       */
+      fileLoading: (draft, tabId, path) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.fileContent[path] = { kind: 'loading' }
+      },
+      /**
+       * Record one file's content.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} path - The file that was read.
+       * @param {object} file - The `readFile` result the Host sent.
+       */
+      fileLoaded: (draft, tabId, path, file) => {
+        const tab = draft.byTab[tabId]
+        if (tab === undefined) return
+        tab.fileContent[path] = { kind: 'ready', file }
+        // Seed the editor draft from the loaded text when no edit is in flight.
+        if (tab.filePath === path && tab.fileDraft === null) tab.fileDraft = file.text
+      },
+      /**
+       * Record why one file's content could not be read.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} path - The file that was read.
+       * @param {string} code - The Remote failure code.
+       * @param {string} message - The Remote failure message.
+       */
+      fileReadFailed: (draft, tabId, path, code, message) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.fileContent[path] = { kind: 'failed', code, message }
+      },
+      /**
+       * Open one file.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} path - The file to open; `null` clears the selection.
+       */
+      selectFile: (draft, tabId, path) => {
+        const tab = draft.byTab[tabId]
+        if (tab === undefined) return
+        if (tab.filePath !== path) tab.fileDraft = null
+        tab.filePath = path
+        tab.fileSave = { kind: 'idle' }
+      },
+      /**
+       * Update the editor draft.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} text - The draft text.
+       */
+      setFileDraft: (draft, tabId, text) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.fileDraft = text
+      },
+      /**
+       * Turn the editor on or off.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {boolean} on - Whether editing is enabled.
+       */
+      setEditMode: (draft, tabId, on) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.editMode = on
+      },
+      /**
+       * Mark a save as in flight.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       */
+      fileSaving: (draft, tabId) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.fileSave = { kind: 'saving' }
+      },
+      /**
+       * Record a completed save.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} path - The file that was written.
+       * @param {string} text - The written text.
+       */
+      fileSaved: (draft, tabId, path, text) => {
+        const tab = draft.byTab[tabId]
+        if (tab === undefined) return
+        tab.fileContent[path] = { kind: 'ready', file: { path, binary: false, truncated: false, bytes: text.length, text } }
+        tab.fileDraft = text
+        tab.fileSave = { kind: 'saved' }
+      },
+      /**
+       * Record why a save failed.
+       * @param {object} draft - Draft state.
+       * @param {string} tabId - The tab being drawn.
+       * @param {string} code - The Remote failure code.
+       * @param {string} message - The Remote failure message.
+       */
+      fileSaveFailed: (draft, tabId, code, message) => {
+        const tab = draft.byTab[tabId]
+        if (tab !== undefined) tab.fileSave = { kind: 'failed', code, message }
       },
       /**
        * Mark the file list as being read.

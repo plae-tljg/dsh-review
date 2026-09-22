@@ -290,6 +290,28 @@ test('the Commit view lists commits', async () => {
   assert.match(html, /aaaaaaa/)
 })
 
+test('the Files view shows a tree and the selected content', async () => {
+  const entry = {
+    path: 'notes.md', status: 'modified', index: ' ', worktree: ' ', staged: false,
+    unstaged: false, untracked: false, renamedFrom: null, added: null, removed: null,
+  }
+  const html = await renderBody(reportFixture(), {
+    bucket: {
+      source: 'files',
+      files: {
+        kind: 'ready',
+        report: { isRepository: true, root: '/repo', count: 1, truncated: false, files: [entry], tree: { directories: [], files: [entry] } },
+      },
+      filePath: 'notes.md',
+      fileContent: { 'notes.md': { kind: 'ready', file: { path: 'notes.md', binary: false, truncated: false, bytes: 6, text: 'hello\n' } } },
+    },
+  })
+  assert.match(html, /data-review-state="files"/)
+  assert.match(html, /notes\.md/)
+  assert.match(html, /data-review-file="notes\.md"/)
+  assert.match(html, /hello/)
+})
+
 test('the body reports a non-repository workspace', async () => {
   const html = await renderBody({
     isRepository: false, root: null, branch: null, detached: false, upstream: null,

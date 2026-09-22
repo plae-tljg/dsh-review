@@ -87,6 +87,9 @@ export function ReviewPanelBody({ scope, tab, face, store, t, openFile }) {
   const listCommits = useMemo(() => (id, signal) => { bridge.listCommits(id, signal) }, [bridge])
   const openCommit = useMemo(() => (id, oid, signal) => { bridge.openCommit(id, oid, signal) }, [bridge])
   const openCommitDiff = useMemo(() => (id, oid, path, signal) => { bridge.openCommitDiff(id, oid, path, signal) }, [bridge])
+  const listFiles = useMemo(() => (id, signal) => { bridge.listFiles(id, signal) }, [bridge])
+  const openFileContent = useMemo(() => (id, path, signal) => { bridge.openFileContent(id, path, signal) }, [bridge])
+  const saveFile = useMemo(() => (id, path, text, signal) => bridge.saveFile(id, path, text, signal), [bridge])
 
   return (
     <ReviewBody
@@ -100,6 +103,9 @@ export function ReviewPanelBody({ scope, tab, face, store, t, openFile }) {
       listCommits={listCommits}
       openCommit={openCommit}
       openCommitDiff={openCommitDiff}
+      listFiles={listFiles}
+      openFileContent={openFileContent}
+      saveFile={saveFile}
       conversation={bridge.conversation}
       sessionId={sessionId}
       openFile={openFile}

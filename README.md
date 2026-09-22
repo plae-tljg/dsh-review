@@ -1,14 +1,15 @@
 # dsh-review
 
-An opencode-style **Review** panel for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) web GUI's right sidebar. One plugin owns both ends of its data path — a read-only `git` service on the Host and a `review` tab in the browser — and shows the session workspace three ways:
+An opencode-style **Review** panel for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) web GUI's right sidebar. One plugin owns both ends of its data path — a `git` service on the Host and a `review` tab in the browser — and shows the session workspace four ways:
 
 - **Uncommitted** — the working tree against `HEAD`, as a directory tree of every changed file, with per-file `+added`/`-removed`, the branch's grand total, and the selected file's unified diff in red/green.
 - **Rounds** — what the agent changed in each conversation round, derived from the live conversation snapshot, shown with the same tree and the same diff body.
 - **Commits** — the recent commit history, newest first; a commit expands to the tree of files it touched, with its own counts, and selecting a file shows that path's diff *within* that commit. Commit files are read lazily, only when a commit is opened.
+- **Files** — a plain workspace browser: the tree of every non-ignored file (`git ls-files`, so `.gitignore` is honoured), the selected file's content on the right, and an **opt-in editor** (off by default) for direct edits.
 
 ```
 ┌ 审阅 ────────────────────────────────────────────────────────┐
-│  [ 未提交 | 按轮次 | 按提交 ]  main ↑1       +42 -7        ⟳   │
+│  [ 未提交 | 按轮次 | 按提交 | 文件 ]  main ↑1   +42 -7     ⟳   │
 ├──────────────────────┬───────────────────────────────────────┤
 │ ▾ src/        +42 -5 │ @@ -14,7 +14,9 @@ export function r…  │
 │   ▾ api/      +8 -2  │   14  14   const rows = parse(input)  │
@@ -35,7 +36,8 @@ The look is a deliberate port of **opencode's** right-hand review panel (see [do
 - **Renames resolve as renames.** The status listing is read for the source path and both names are diffed; a pure rename reports "no text" rather than a whole-file addition.
 - **Untracked files** are rendered by `git diff --no-index` against the null device, so Git itself decides the encoding, the binary case and the hunk header.
 - **Path-safe.** Paths reach Git as bare repository-relative pathspecs under `--literal-pathspecs`, single-quoted for the shell, so a name holding a space, a `*`, a quote or a newline round-trips exactly.
-- **Nothing writes.** Every invocation is a read; `GIT_OPTIONAL_LOCKS=0` keeps a refresh from taking an index lock a concurrent Agent operation might want.
+- **A read-only workspace browser, with an opt-in editor.** The Files view lists the project (`git ls-files --cached --others --exclude-standard`), reads a file as text, and — only after the edit toggle is turned on — writes it back. A write is confined to the session workspace root, refuses a symlink, and is atomic (a sibling temp file renamed into place).
+- **Nothing else writes.** Uncommitted, Rounds and Commits only read; `GIT_OPTIONAL_LOCKS=0` keeps a refresh from taking an index lock a concurrent Agent operation might want.
 
 ## Install
 
@@ -123,6 +125,7 @@ Deployment caps are the service's Cordis config:
 - **Code Mode (`run_code`) nested edits** are derived from the snapshot; the Host-side before/after recorder from the reference plugin is not ported, so an edge case that does not survive into the snapshot is not recovered.
 - **Desktop split only.** The list and the diff sit side by side above 520px and stack below it; there is no draggable divider.
 - **No word-level highlighting** and **no line comments** (opencode's inline-comment affordance is not ported).
+- **The Files editor is a plain textarea** (no syntax highlighting; the browser's own undo applies). Binary and truncation-capped files are read-only.
 - **Mode-only changes state no body** — a permission change appears with its counts and reads "no text".
 
 ## References

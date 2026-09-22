@@ -1,16 +1,17 @@
 /**
- * `dsh-review` — an opencode-style Review tab for the DeepSeek Harness web
- * GUI's right Sidebar.
+ * `dsh-review` — an opencode-style Review panel for the DeepSeek Harness web
+ * GUI's right sidebar.
  *
- * The Host half mounts `WorkspaceReview`, a read-only Git service over one
+ * The Host half mounts `WorkspaceReview`, a Git-and-files service over one
  * session's workspace root exposed as the `workspaceReview` Remote namespace.
- * The browser half registers the `review` tab type that lists every uncommitted
- * file with its `+added`/`-removed` counts and draws the selected file's
- * unified diff.
+ * The browser half registers the `review` tab type with four sources:
+ * uncommitted status, per-round changes, per-commit changes, and a plain file
+ * browser with an opt-in editor.
  *
- * Nothing here writes to the repository. The whole service is four reads:
- * `rev-parse` for the work-tree and HEAD checks, `status --porcelain` for the
- * file rows, `diff --numstat` for the counts, and `diff` for one patch.
+ * Every read is a git or filesystem read except the Files editor's `writeFile`
+ * (opt-in, confined to the workspace root). Everything else is unchanged:
+ * `status --porcelain` for the file rows, `diff --numstat` for the counts,
+ * `diff` for one patch, `log`/`show` for commits, `ls-files` for the tree.
  */
 
 export { WorkspaceReview, DEFAULT_CONFIG } from './host/review.js'

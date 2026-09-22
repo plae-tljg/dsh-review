@@ -124,6 +124,15 @@ function TotalsGlyph() {
   )
 }
 
+/** The pencil glyph on the Files-view edit toggle. */
+function EditGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
+      <path d="M11.5 2.5l2 2M3 11l7.5-7.5 2 2L5 13l-3 .9.9-2.9z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 /** The wrap-arrow glyph on the word-wrap toggle. */
 function WrapGlyph() {
   return (
@@ -138,7 +147,7 @@ function WrapGlyph() {
  * @param {object} props - Row props.
  * @returns {import('react').ReactNode} The row.
  */
-function FileRow({ file, active, depth, t, onSelect }) {
+function FileRow({ file, active, depth, t, onSelect, plain }) {
   const label = t(`status.${file.status}`)
   return (
     <button
@@ -153,16 +162,20 @@ function FileRow({ file, active, depth, t, onSelect }) {
       <span className={css.chevron} aria-hidden="true" />
       <span className={css.icon} aria-hidden="true"><FileTypeIcon path={file.path} size={16} /></span>
       <span className={css.fileName}>{baseName(file.path)}</span>
-      <span className={css.change} data-change={file.status} aria-label={label} title={label}>
-        {STATUS_LETTER[file.status] ?? 'M'}
-      </span>
-      <span className={css.counts}>
-        <Counts
-          added={file.added ?? 0}
-          removed={file.removed ?? 0}
-          binary={file.added === null && file.removed === null}
-        />
-      </span>
+      {!plain && (
+        <>
+          <span className={css.change} data-change={file.status} aria-label={label} title={label}>
+            {STATUS_LETTER[file.status] ?? 'M'}
+          </span>
+          <span className={css.counts}>
+            <Counts
+              added={file.added ?? 0}
+              removed={file.removed ?? 0}
+              binary={file.added === null && file.removed === null}
+            />
+          </span>
+        </>
+      )}
     </button>
   )
 }
@@ -172,7 +185,7 @@ function FileRow({ file, active, depth, t, onSelect }) {
  * @param {object} props - Node props.
  * @returns {import('react').ReactNode} The subtree.
  */
-function DirectoryRows({ node, depth, selected, collapsed, showCounts, onToggle, onSelect, t }) {
+function DirectoryRows({ node, depth, selected, collapsed, showCounts, plain, onToggle, onSelect, t }) {
   const open = !collapsed.has(node.path)
   return (
     <>
@@ -189,8 +202,8 @@ function DirectoryRows({ node, depth, selected, collapsed, showCounts, onToggle,
         </span>
         <span className={css.icon} aria-hidden="true"><FileTypeIcon kind="folder" size={16} /></span>
         <span className={css.folderName}>{node.name}</span>
-        {!open && <span className={css.folderCount}>{t('files.count', { count: String(countFiles(node)) })}</span>}
-        {showCounts && (
+        {!open && !plain && <span className={css.folderCount}>{t('files.count', { count: String(countFiles(node)) })}</span>}
+        {showCounts && !plain && (
           <span className={css.counts}>
             <Counts added={node.added} removed={node.removed} binary={false} />
           </span>
@@ -206,6 +219,7 @@ function DirectoryRows({ node, depth, selected, collapsed, showCounts, onToggle,
               selected={selected}
               collapsed={collapsed}
               showCounts={showCounts}
+              plain={plain}
               onToggle={onToggle}
               onSelect={onSelect}
               t={t}
@@ -217,6 +231,7 @@ function DirectoryRows({ node, depth, selected, collapsed, showCounts, onToggle,
               file={file}
               active={file.path === selected}
               depth={depth + 1}
+              plain={plain}
               t={t}
               onSelect={() => onSelect(file.path)}
             />
@@ -369,11 +384,69 @@ function RoundDiffBody({ round, file, t, wrap, onOpen }) {
 }
 
 /**
+ * The Files view's body: the read-only content of a file, or the opt-in editor.
+ * @param {object} props - File, draft, edit state, and callbacks.
+ * @returns {import('react').ReactNode} The body.
+ */
+function FileBody({ file, draft, editMode, save, onChange, onSave, onRevert, onOpen, wrap, t }) {
+  const openButton = onOpen !== undefined && (
+    <button type="button" className={css.copy} onClick={() => onOpen(file.path)} title={t('diff.open')} data-review-open>
+      {t('diff.open')}
+    </button>
+  )
+  if (file.binary) {
+    return (
+      <div className={css.diffScroll} data-wrap={wrap ? 'on' : 'off'} data-review-file={file.path}>
+        <div className={css.diffHead}><span className={css.diffPath}>{file.path}</span>{openButton}</div>
+        <p className={css.notice}>{t('file.binary')}</p>
+      </div>
+    )
+  }
+  if (editMode) {
+    return (
+      <div className={css.editor}>
+        <div className={css.diffHead}>
+          <span className={css.diffPath}>{file.path}</span>
+          <span className={css.editorStatus} data-review-save={save.kind}>
+            {save.kind === 'saving'
+              ? t('file.saving')
+              : save.kind === 'saved'
+                ? t('file.saved')
+                : save.kind === 'failed'
+                  ? t('file.saveFailed', { message: save.message })
+                  : ''}
+          </span>
+          <button type="button" className={css.copy} onClick={onRevert}>{t('file.revert')}</button>
+          <button type="button" className={css.copy} onClick={onSave} data-review-save-button>{t('file.save')}</button>
+        </div>
+        <textarea
+          className={css.textarea}
+          value={draft ?? file.text}
+          onChange={(event) => onChange(event.target.value)}
+          spellCheck={false}
+          data-review-editor
+        />
+      </div>
+    )
+  }
+  return (
+    <div className={css.diffScroll} data-wrap={wrap ? 'on' : 'off'} data-review-file={file.path}>
+      <div className={css.diffHead}>
+        <span className={css.diffPath}>{file.path}</span>
+        {file.truncated && <span className={css.hint}>{t('diff.truncated')}</span>}
+        {openButton}
+      </div>
+      <pre className={css.fileText}>{file.text}</pre>
+    </div>
+  )
+}
+
+/**
  * The Review tab's body.
  * @param {object} props - The Slot shares this registration derives.
  * @returns {import('react').ReactNode} The tab body.
  */
-export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, select, open, listCommits, openCommit, openCommitDiff, t, conversation, sessionId, openFile }) {
+export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, select, open, listCommits, openCommit, openCommitDiff, listFiles, openFileContent, saveFile, t, conversation, sessionId, openFile }) {
   const { tab } = useTabInfo()
   const { signal } = tab
   const state = useStore(store => store.byTab[tab.id])
@@ -490,6 +563,28 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
     })
   }, [])
 
+  // ── Files-view state and reads ───────────────────────────────────────────
+  const filesState = state?.files
+  const fileContent = state?.fileContent ?? EMPTY_STATE
+  const filePath = state?.filePath ?? null
+  const fileDraft = state?.fileDraft ?? null
+  const editMode = state?.editMode ?? false
+  const fileSave = state?.fileSave ?? { kind: 'idle' }
+
+  // Read the workspace file tree the first time the Files source is shown.
+  useEffect(() => {
+    if (source !== 'files' || signal.aborted) return
+    const kind = filesState?.kind
+    if (kind === undefined || kind === 'idle') listFiles(tab.id, signal)
+  }, [source, filesState?.kind, tab.id, signal, listFiles])
+
+  // Opening a file reads its content, once.
+  useEffect(() => {
+    if (source !== 'files' || signal.aborted) return
+    if (filePath === null) return
+    if (fileContent[filePath] === undefined) openFileContent(tab.id, filePath, signal)
+  }, [source, filePath, fileContent, tab.id, signal, openFileContent])
+
   // Opening a path reads its diff on demand. The face dispatches only when the
   // body is not held, so a re-render does not refetch, and `held` is a
   // dependency so a body cleared by a refresh is read again.
@@ -525,6 +620,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
         {switchButton('git', t('source.uncommitted'))}
         {switchButton('rounds', t('source.rounds'))}
         {switchButton('commits', t('source.commits'))}
+        {switchButton('files', t('source.files'))}
       </span>
       <span className={css.totals} data-review-totals={source}>
         {source === 'git'
@@ -585,6 +681,19 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
       >
         <WrapGlyph />
       </button>
+      {source === 'files' && (
+        <button
+          type="button"
+          className={editMode ? `${css.action} ${css.actionOn}` : css.action}
+          onClick={() => actions.setEditMode(tab.id, !editMode)}
+          title={t('toggle.edit')}
+          aria-label={t('toggle.edit')}
+          aria-pressed={editMode}
+          data-review-edit={editMode ? 'on' : 'off'}
+        >
+          <EditGlyph />
+        </button>
+      )}
       {source === 'git' && (
         <button
           type="button"
@@ -683,6 +792,86 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
               </div>
             </div>
           )}
+      </div>
+    )
+  }
+
+  // ── Files ─────────────────────────────────────────────────────────────────
+
+  if (source === 'files') {
+    if (filesState === undefined || filesState.kind === 'idle' || filesState.kind === 'loading') {
+      return <div className={css.root} data-review-state="files-loading">{header}<p className={css.notice}>{t('refreshing')}</p></div>
+    }
+    if (filesState.kind === 'failed') {
+      return (
+        <div className={css.root} data-review-state="files-failed">
+          {header}
+          <p className={css.notice}>{t('error.unavailable', { message: filesState.message })}</p>
+          <button type="button" className={css.action} onClick={() => { listFiles(tab.id, signal) }}>{t('reload')}</button>
+        </div>
+      )
+    }
+    if (!filesState.report.isRepository) {
+      return <div className={css.root} data-review-state="not-repository">{header}<p className={css.notice}>{t('notRepository')}</p></div>
+    }
+    const heldFile = filePath === null ? undefined : fileContent[filePath]
+    const openContent = heldFile?.kind === 'ready' ? heldFile.file : undefined
+    return (
+      <div className={css.root} data-review-state="files">
+        {header}
+        {filesState.report.truncated && <p className={css.hint}>{t('truncated')}</p>}
+        <div className={css.split}>
+          <div className={css.list}>
+            {filesState.report.tree.directories.map(node => (
+              <DirectoryRows
+                key={node.path}
+                node={node}
+                depth={0}
+                selected={filePath}
+                collapsed={collapsed}
+                showCounts={false}
+                plain
+                onToggle={onToggle}
+                onSelect={(path) => actions.selectFile(tab.id, path)}
+                t={t}
+              />
+            ))}
+            {filesState.report.tree.files.map(file => (
+              <FileRow
+                key={file.path}
+                file={file}
+                active={file.path === filePath}
+                depth={0}
+                plain
+                t={t}
+                onSelect={() => actions.selectFile(tab.id, file.path)}
+              />
+            ))}
+            <p className={css.count}>{t('files.count', { count: String(filesState.report.count) })}</p>
+          </div>
+          <div className={css.body}>
+            {filePath === null
+              ? <p className={css.notice}>{t('file.select')}</p>
+              : heldFile === undefined || heldFile.kind === 'loading'
+                ? <p className={css.notice}>{t('refreshing')}</p>
+                : heldFile.kind === 'failed'
+                  ? <p className={css.notice}>{t('error.unavailable', { message: heldFile.message })}</p>
+                  : (
+                    <FileBody
+                      file={openContent}
+                      draft={fileDraft}
+                      editMode={editMode}
+                      save={fileSave}
+                      onChange={(text) => actions.setFileDraft(tab.id, text)}
+                      onSave={() => { void saveFile(tab.id, openContent.path, fileDraft ?? openContent.text, signal) }}
+                      onRevert={() => actions.setFileDraft(tab.id, openContent.text)}
+                      onOpen={openInTab}
+                      wrap={wrap}
+                      t={t}
+                    />
+                  )}
+          </div>
+        </div>
       </div>
     )
   }

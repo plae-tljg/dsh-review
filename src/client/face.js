@@ -176,6 +176,58 @@ export function reviewFace(remote, getConversation) {
       })
     }
 
+    /**
+     * Read the workspace file tree (Files view).
+     * @param {string} tabId - The tab being drawn.
+     * @param {AbortSignal} signal - The tab record's lifetime.
+     */
+    const loadFiles = (tabId, signal) => {
+      if (signal.aborted) return
+      const key = `files\u0000${tabId}`
+      const generation = claim(generations, key)
+      actions.filesLoading(tabId)
+      void withDeadline(remote.workspaceReview.listFiles(sessionId, signal), READ_TIMEOUT_MS).then((result) => {
+        if (generations.get(key) !== generation) return
+        if (result.ok) actions.filesLoaded(tabId, result.value)
+        else actions.filesFailed(tabId, result.error.code, result.error.message)
+      })
+    }
+
+    /**
+     * Read one workspace file's content (Files view).
+     * @param {string} tabId - The tab being drawn.
+     * @param {string} path - The file to read.
+     * @param {AbortSignal} signal - The tab record's lifetime.
+     */
+    const loadFileContent = (tabId, path, signal) => {
+      if (signal.aborted) return
+      const key = `file\u0000${tabId}\u0000${path}`
+      const generation = claim(diffGenerations, key)
+      actions.fileLoading(tabId, path)
+      void withDeadline(remote.workspaceReview.readFile(sessionId, path, signal), READ_TIMEOUT_MS).then((result) => {
+        if (diffGenerations.get(key) !== generation) return
+        if (result.ok) actions.fileLoaded(tabId, path, result.value)
+        else actions.fileReadFailed(tabId, path, result.error.code, result.error.message)
+      })
+    }
+
+    /**
+     * Write one workspace file's content (Files view editor).
+     * @param {string} tabId - The tab being drawn.
+     * @param {string} path - The file to write.
+     * @param {string} text - The new content.
+     * @param {AbortSignal} signal - The tab record's lifetime.
+     * @returns {Promise<void>} Resolves once the store has the outcome.
+     */
+    const saveFile = (tabId, path, text, signal) => {
+      if (signal.aborted) return Promise.resolve()
+      actions.fileSaving(tabId)
+      return withDeadline(remote.workspaceReview.writeFile(sessionId, path, text, signal), READ_TIMEOUT_MS).then((result) => {
+        if (result.ok) actions.fileSaved(tabId, path, text)
+        else actions.fileSaveFailed(tabId, result.error.code, result.error.message)
+      })
+    }
+
     return {
       /** The session identity, for building a workspace file address. */
       sessionId,
@@ -210,6 +262,15 @@ export function reviewFace(remote, getConversation) {
       },
       openCommitDiff(tabId, oid, path, signal) {
         loadCommitDiff(tabId, oid, path, signal)
+      },
+      listFiles(tabId, signal) {
+        loadFiles(tabId, signal)
+      },
+      openFileContent(tabId, path, signal) {
+        loadFileContent(tabId, path, signal)
+      },
+      saveFile(tabId, path, text, signal) {
+        return saveFile(tabId, path, text, signal)
       },
     }
   }

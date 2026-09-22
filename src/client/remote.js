@@ -113,6 +113,31 @@ const reviewCommit = z.object({
   removed: z.number(),
 })
 
+const reviewFiles = z.object({
+  isRepository: z.boolean(),
+  root: z.string().nullable(),
+  files: z.array(reviewFile),
+  tree: z.object({
+    directories: z.array(treeNode),
+    files: z.array(reviewFile),
+  }),
+  count: z.number(),
+  truncated: z.boolean(),
+})
+
+const reviewFileText = z.object({
+  path: z.string(),
+  binary: z.boolean(),
+  truncated: z.boolean(),
+  bytes: z.number(),
+  text: z.string(),
+})
+
+const reviewWriteResult = z.object({
+  path: z.string(),
+  bytes: z.number(),
+})
+
 /**
  * The error-code and namespace merges that type this contribution live in
  * `types/augment.d.ts`: this package is authored in plain JavaScript, and a
@@ -243,6 +268,73 @@ export const TYPERT_REMOTE = {
         mode: 'strict',
         typeSymbol: 'dsh-review/host/types#ReviewDiff',
         schema: reviewDiff,
+      },
+    },
+    {
+      id: 'dsh-review#workspaceReview/listFiles',
+      service: 'workspaceReview',
+      namespace: 'workspaceReview',
+      method: 'listFiles',
+      invocation: { kind: 'direct' },
+      scope: { context: 'agent', wire: 'agentId' },
+      parameters: [agentParameter],
+      cancellation: { parameter: 'signal' },
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-review/host/types#ReviewFiles',
+        schema: reviewFiles,
+      },
+    },
+    {
+      id: 'dsh-review#workspaceReview/readFile',
+      service: 'workspaceReview',
+      namespace: 'workspaceReview',
+      method: 'readFile',
+      invocation: { kind: 'direct' },
+      scope: { context: 'agent', wire: 'agentId' },
+      parameters: [
+        agentParameter,
+        {
+          name: 'path',
+          wire: 'path',
+          source: 'json',
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewPath', schema: z.string() },
+        },
+      ],
+      cancellation: { parameter: 'signal' },
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-review/host/types#ReviewFileText',
+        schema: reviewFileText,
+      },
+    },
+    {
+      id: 'dsh-review#workspaceReview/writeFile',
+      service: 'workspaceReview',
+      namespace: 'workspaceReview',
+      method: 'writeFile',
+      invocation: { kind: 'direct' },
+      scope: { context: 'agent', wire: 'agentId' },
+      parameters: [
+        agentParameter,
+        {
+          name: 'path',
+          wire: 'path',
+          source: 'json',
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewPath', schema: z.string() },
+        },
+        {
+          name: 'text',
+          wire: 'text',
+          source: 'json',
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewText', schema: z.string() },
+        },
+      ],
+      cancellation: { parameter: 'signal' },
+      result: {
+        mode: 'strict',
+        typeSymbol: 'dsh-review/host/types#ReviewWriteResult',
+        schema: reviewWriteResult,
       },
     },
   ],
