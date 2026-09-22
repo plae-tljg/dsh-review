@@ -813,29 +813,10 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
     open(tab.id, selected, context, signal)
   }, [selected, held, tab.id, context, signal, open])
 
-  if (state === undefined) return null
-
-  const roundTurn = state.roundTurn
-  const roundPath = state.roundPath
-  const selectedRound = roundTurn === null ? undefined : rounds.find(round => round.turn === roundTurn)
-  const selectedRoundFile = selectedRound?.files.find(file => file.path === roundPath)
-
-  const switchButton = (value, label) => (
-    <button
-      type="button"
-      className={source === value ? `${css.switchButton} ${css.switchOn}` : css.switchButton}
-      onClick={() => actions.setSource(tab.id, value)}
-      data-review-source={value}
-      aria-pressed={source === value}
-    >
-      {label}
-    </button>
-  )
-
-  const onRefresh = () => { refresh(tab.id, signal) }
-
   // ── View-state persistence ───────────────────────────────────────────────
-  // Restore once per session, then mirror every change back (debounced).
+  // Restore once per session, then mirror every change back (debounced). These
+  // hooks sit above the `state === undefined` early return so the hook order is
+  // stable across the first (unseeded) and later renders.
   const restoredView = useRef(false)
   useEffect(() => {
     if (restoredView.current || sessionId === undefined || state === undefined) return
@@ -878,6 +859,27 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
     }, 400)
     return () => clearTimeout(timer)
   }, [sessionId, state, listWidth, wrap, folderCounts, filter, collapsed, filesCollapsed, expandedCommits])
+
+  if (state === undefined) return null
+
+  const roundTurn = state.roundTurn
+  const roundPath = state.roundPath
+  const selectedRound = roundTurn === null ? undefined : rounds.find(round => round.turn === roundTurn)
+  const selectedRoundFile = selectedRound?.files.find(file => file.path === roundPath)
+
+  const switchButton = (value, label) => (
+    <button
+      type="button"
+      className={source === value ? `${css.switchButton} ${css.switchOn}` : css.switchButton}
+      onClick={() => actions.setSource(tab.id, value)}
+      data-review-source={value}
+      aria-pressed={source === value}
+    >
+      {label}
+    </button>
+  )
+
+  const onRefresh = () => { refresh(tab.id, signal) }
 
   const splitStyle = { '--review-list-width': `${String(listWidth)}px` }
   const dividerProps = {
