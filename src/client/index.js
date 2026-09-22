@@ -97,6 +97,7 @@ function panelApply(ctx) {
         face={face}
         store={store}
         t={t}
+        openFile={props.onOpenFile ?? ((path) => { panel.openFile(props.scope, path) })}
       />
     ),
   }), 'dsh-review: panel tab')

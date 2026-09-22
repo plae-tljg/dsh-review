@@ -455,9 +455,22 @@
 }
 
 .text {
-  /* A diff is read by its indentation, so lines never wrap. */
+  /* A diff is read by its indentation; wrap is a reader choice. */
   white-space: pre;
   padding-right: 12px;
+}
+
+/* Word wrap on: the text column may shrink and wrap. Off: the row is sized to
+   its content, so a long line scrolls sideways instead of being clipped. */
+.diffScroll[data-wrap='on'] .text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diffScroll[data-wrap='off'] .line {
+  grid-template-columns: 3.5em 3.5em 1.2em max-content;
+  width: max-content;
+  min-width: 100%;
 }
 
 .line[data-kind='add'] {

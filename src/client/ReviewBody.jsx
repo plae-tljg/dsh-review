@@ -139,6 +139,15 @@ function TotalsGlyph() {
   )
 }
 
+/** The wrap-arrow glyph on the word-wrap toggle. */
+function WrapGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
+      <path d="M2 4h12M2 8h9a2 2 0 110 4H8m0 0l2-2m-2 2l2 2M2 12h2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 /**
  * One changed file.
  * @param {object} props - Row props.
@@ -263,7 +272,7 @@ function Hunk({ hunk }) {
  * @param {object} props - Body props.
  * @returns {import('react').ReactNode} The diff.
  */
-function DiffBody({ state, path, t }) {
+function DiffBody({ state, path, t, wrap, onOpen }) {
   const copy = useCallback(() => {
     if (state.kind !== 'ready' || state.diff.patch === '') return
     void navigator.clipboard?.writeText(state.diff.patch)
@@ -279,10 +288,15 @@ function DiffBody({ state, path, t }) {
   const { diff } = state
   const file = diff.file
   return (
-    <div className={css.diffScroll} data-review-diff={path}>
+    <div className={css.diffScroll} data-wrap={wrap ? 'on' : 'off'} data-review-diff={path}>
       <div className={css.diffHead}>
         {file !== null && file.oldPath !== null && <span className={css.renameFrom}>{file.oldPath} → </span>}
         <span className={css.diffPath}>{path}</span>
+        {onOpen !== undefined && (
+          <button type="button" className={css.copy} onClick={() => onOpen(path)} title={t('diff.open')} data-review-open>
+            {t('diff.open')}
+          </button>
+        )}
         {diff.patch !== '' && (
           <button type="button" className={css.copy} onClick={copy} title={t('diff.copy')}>
             {t('diff.copy')}
@@ -308,29 +322,37 @@ function DiffBody({ state, path, t }) {
  * @param {object} props - Body props.
  * @returns {import('react').ReactNode} The diff.
  */
-function RoundDiffBody({ round, file, t }) {
+function RoundDiffBody({ round, file, t, wrap, onOpen }) {
+  const head = (
+    <div className={css.diffHead}>
+      <span className={css.renameFrom}>{t('round.label', { turn: String(round.turn) })} · </span>
+      <span className={css.diffPath}>{file.path}</span>
+      {onOpen !== undefined && (
+        <button type="button" className={css.copy} onClick={() => onOpen(file.path)} title={t('diff.open')} data-review-open>
+          {t('diff.open')}
+        </button>
+      )}
+    </div>
+  )
   if (file.deleted === true) {
     return (
-      <div className={css.diffScroll} data-review-round-diff={file.path}>
-        <div className={css.diffHead}><span className={css.diffPath}>{file.path}</span></div>
+      <div className={css.diffScroll} data-wrap={wrap ? 'on' : 'off'} data-review-round-diff={file.path}>
+        {head}
         <p className={css.notice}>{t('round.deleted')}</p>
       </div>
     )
   }
   if (file.hunks.length === 0) {
     return (
-      <div className={css.diffScroll} data-review-round-diff={file.path}>
-        <div className={css.diffHead}><span className={css.diffPath}>{file.path}</span></div>
+      <div className={css.diffScroll} data-wrap={wrap ? 'on' : 'off'} data-review-round-diff={file.path}>
+        {head}
         <p className={css.notice}>{t('diff.noBody')}</p>
       </div>
     )
   }
   return (
-    <div className={css.diffScroll} data-review-round-diff={file.path}>
-      <div className={css.diffHead}>
-        <span className={css.renameFrom}>{t('round.label', { turn: String(round.turn) })} · </span>
-        <span className={css.diffPath}>{file.path}</span>
-      </div>
+    <div className={css.diffScroll} data-wrap={wrap ? 'on' : 'off'} data-review-round-diff={file.path}>
+      {head}
       {file.hunks.map((hunk, index) => {
         const rows = lineDiff(hunk.oldText, hunk.newText)
         let oldNumber = 1
@@ -366,7 +388,7 @@ function RoundDiffBody({ round, file, t }) {
  * @param {object} props - The Slot shares this registration derives.
  * @returns {import('react').ReactNode} The tab body.
  */
-export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, select, open, t, conversation }) {
+export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, select, open, t, conversation, sessionId, openFile }) {
   const { tab } = useTabInfo()
   const { signal } = tab
   const state = useStore(store => store.byTab[tab.id])
@@ -374,6 +396,15 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   const [collapsed, setCollapsed] = useState(() => new Set())
   const [turnCollapsed, setTurnCollapsed] = useState(() => new Set())
   const [folderCounts, setFolderCounts] = useState(true)
+  const [wrap, setWrap] = useState(false)
+  // Opening a file in a viewer tab: the panel supplies its own opener, while
+  // the native seat builds a `dsh-resource://file` address for the session and
+  // the repository-relative path.
+  const openInTab = useMemo(() => {
+    if (openFile !== undefined) return openFile
+    if (sessionId === undefined || typeof tab.actions?.openResource !== 'function') return undefined
+    return (path) => { tab.actions.openResource(`dsh-resource://file/session/${sessionId}/${path}`) }
+  }, [openFile, sessionId, tab])
 
   useEffect(() => {
     // A bucket gone because the record aborted must not be re-seeded by a
@@ -518,6 +549,17 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
       >
         <TotalsGlyph />
       </button>
+      <button
+        type="button"
+        className={wrap ? `${css.action} ${css.actionOn}` : css.action}
+        onClick={() => setWrap(value => !value)}
+        title={t('toggle.wrap')}
+        aria-label={t('toggle.wrap')}
+        aria-pressed={wrap}
+        data-review-wrap={wrap ? 'on' : 'off'}
+      >
+        <WrapGlyph />
+      </button>
       {source === 'git' && (
         <button
           type="button"
@@ -612,7 +654,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                   ? <p className={css.notice}>{t('diff.select')}</p>
                   : held === undefined
                     ? <p className={css.notice}>{t('refreshing')}</p>
-                    : <DiffBody state={held} path={selected} t={t} />}
+                    : <DiffBody state={held} path={selected} t={t} wrap={wrap} onOpen={openInTab} />}
               </div>
             </div>
           )}
@@ -691,7 +733,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
             <div className={css.body}>
               {selectedRound === undefined || selectedRoundFile === undefined
                 ? <p className={css.notice}>{t('round.select')}</p>
-                : <RoundDiffBody round={selectedRound} file={selectedRoundFile} t={t} />}
+                : <RoundDiffBody round={selectedRound} file={selectedRoundFile} t={t} wrap={wrap} onOpen={openInTab} />}
             </div>
           </div>
         )}

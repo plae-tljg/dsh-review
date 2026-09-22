@@ -123,6 +123,8 @@ export function reviewFace(remote, getConversation) {
     }
 
     return {
+      /** The session identity, for building a workspace file address. */
+      sessionId,
       /** The session's conversation snapshot source, for the Rounds view. */
       conversation: conversationFor(sessionId),
       start(tabId, signal) {

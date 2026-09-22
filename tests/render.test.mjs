@@ -82,7 +82,7 @@ function reportFixture() {
 }
 
 /** Render the tab body against one report and return its HTML. */
-async function renderBody(report) {
+async function renderBody(report, options = {}) {
   const { renderToStaticMarkup } = clientRequire('react-dom/server')
   const React = clientRequire('react')
   const { apply } = await loadClientHalf()
@@ -109,16 +109,17 @@ async function renderBody(report) {
     },
   }
   apply(ctx)
-  const state = { byTab: { t1: { report: { kind: 'ready', report }, diffs: {}, selected: 'src/client/ReviewBody.tsx', staged: {}, source: 'git', roundTurn: null, roundPath: null } } }
+  const state = { byTab: { t1: { report: { kind: 'ready', report }, diffs: options.diffs ?? {}, selected: 'src/client/ReviewBody.tsx', staged: {}, source: 'git', roundTurn: null, roundPath: null } } }
   // The component goes through React, not a direct call: calling it as a plain
   // function would run its hooks outside a renderer and throw.
   return renderToStaticMarkup(React.createElement(Body, {
-    useTabInfo: () => ({ tab: { id: 't1', signal: new AbortController().signal, actions: {}, title: 'Review', visible: true, params: {} } }),
+    useTabInfo: () => ({ tab: { id: 't1', signal: new AbortController().signal, actions: options.actions ?? {}, title: 'Review', visible: true, params: {} } }),
     useStore: (selector) => selector(state),
     actions: { toggleStaged: () => {}, select: () => {}, start: () => {} },
     start: () => {}, refresh: () => {}, select: () => {}, open: () => {},
     t: (key, params) => (params === undefined ? key : `${key}:${JSON.stringify(params)}`),
     css,
+    ...options.extra,
   }))
 }
 
@@ -212,6 +213,41 @@ test('the body renders the file tree with folder totals and root files', async (
   assert.match(html, /main/)
   // A binary file's row says so instead of showing a bogus +0 -0.
   assert.match(html, /bin/)
+})
+
+test('the diff header opens the file and defaults to no wrap', async () => {
+  const diff = {
+    untracked: false,
+    truncated: false,
+    patch: '@@ -1 +1 @@',
+    file: {
+      path: 'src/client/ReviewBody.tsx',
+      oldPath: null,
+      binary: false,
+      notice: null,
+      hunks: [{
+        header: '',
+        oldStart: 1,
+        newStart: 1,
+        oldCount: 1,
+        newCount: 1,
+        lines: [
+          { kind: 'del', text: 'old', oldNumber: 1, newNumber: null },
+          { kind: 'add', text: 'new', oldNumber: null, newNumber: 1 },
+        ],
+      }],
+    },
+  }
+  const html = await renderBody(reportFixture(), {
+    diffs: { 'src/client/ReviewBody.tsx': { kind: 'ready', diff } },
+    extra: { sessionId: 's1', openFile: () => {} },
+  })
+  // The open affordance is present when an opener exists, and the diff starts
+  // unwrapped so a long line scrolls rather than being clipped.
+  assert.match(html, /data-review-open/)
+  assert.match(html, /data-wrap="off"/)
+  assert.match(html, /data-kind="del"/)
+  assert.match(html, /data-kind="add"/)
 })
 
 test('the body indents a nested row deeper than its folder', async () => {

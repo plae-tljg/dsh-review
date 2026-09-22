@@ -56,7 +56,7 @@ function releaseTab(tabId) {
  * @param {object} props - Panel props plus the review face and dictionary.
  * @returns {import('react').ReactNode} The tab body.
  */
-export function ReviewPanelBody({ scope, tab, face, store, t }) {
+export function ReviewPanelBody({ scope, tab, face, store, t, openFile }) {
   const tabId = tab.id
   const sessionId = scope.sessionId
 
@@ -95,6 +95,8 @@ export function ReviewPanelBody({ scope, tab, face, store, t }) {
       select={select}
       open={open}
       conversation={bridge.conversation}
+      sessionId={sessionId}
+      openFile={openFile}
       t={t}
     />
   )

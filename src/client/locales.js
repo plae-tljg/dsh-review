@@ -26,6 +26,7 @@ export const zh = {
   expandAll: '展开全部',
   collapseAll: '收起全部',
   'toggle.folderCounts': '显示或隐藏文件夹合计',
+  'toggle.wrap': '自动换行',
 
   'empty.title': '没有未提交的改动',
   'empty.description': '工作区和暂存区都是干净的。',
@@ -53,6 +54,7 @@ export const zh = {
   'diff.empty': '这个文件没有差异。',
   'diff.copy': '复制差异',
   'diff.copied': '已复制',
+  'diff.open': '在新标签页打开',
   'diff.hunk': '第 {start} 行起',
   'diff.select': '从左侧选一个文件查看差异。',
 
@@ -89,6 +91,7 @@ export const en = {
   expandAll: 'Expand all',
   collapseAll: 'Collapse all',
   'toggle.folderCounts': 'Show or hide folder totals',
+  'toggle.wrap': 'Word wrap',
 
   'empty.title': 'No uncommitted changes',
   'empty.description': 'The working tree and the index are both clean.',
@@ -116,6 +119,7 @@ export const en = {
   'diff.empty': 'This file has no diff.',
   'diff.copy': 'Copy diff',
   'diff.copied': 'Copied',
+  'diff.open': 'Open in a tab',
   'diff.hunk': 'from line {start}',
   'diff.select': 'Pick a file on the left to see its diff.',
 
