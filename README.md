@@ -29,7 +29,8 @@ The look is a deliberate port of **opencode's** right-hand review panel (see [do
 - **A viewer escape hatch.** Every changed file has an **Open in a tab** action in its diff header, which opens the file in the sidebar's own file viewer (the native document preview, or `dsh-better-sidebar`'s editor) so it can be read without the diff decoration.
 - **Word wrap and horizontal scrolling.** A long line scrolls sideways by default; a header toggle turns on word wrap. Both the Uncommitted and the Rounds diff bodies honour it.
 - **Filter and remember.** Every rail carries a sticky filter box that narrows the tree, the rounds or the commits (a commit matches by subject/short hash or by a file it touched). The chosen source, rail width, wrap/fold toggles, filter and open file are remembered per session in `localStorage`, so reopening lands where you left off.
-- **Foldable diffs.** Hunk context is adjustable (3/10/30 lines, re-read from Git); a run of unchanged lines longer than six folds behind one `N unchanged lines` row, and an expand-all control opens every fold at once.
+- **Foldable diffs.** Hunk context is adjustable (3/10/30 lines, or **All** to pull the whole file), re-read from Git; a run of unchanged lines longer than six folds behind one `N unchanged lines` row, and an expand-all control opens every fold at once.
+- **Reload in place.** Uncommitted, Files and Commits each carry a reload control (⟳); Rounds is live from the conversation snapshot and needs none.
 - **Every uncommitted change**, staged, unstaged and untracked, from `git status --porcelain=v1 -z`.
 - **Per-file counts** from `git diff --numstat -z`, with a binary change marked `bin` rather than `+0 -0`, plus the **grand total** across the report.
 - **A real unified diff**, parsed on the Host into hunks: context lines appear once, additions and deletions each carry their own gutter number, and every hunk opens with its `@@ -a,b +c,d @@` coordinates.

@@ -117,7 +117,11 @@ export function createReviewStore() {
        */
       commitsLoading: (draft, tabId) => {
         const tab = draft.byTab[tabId]
-        if (tab !== undefined) tab.commits = { kind: 'loading' }
+        if (tab === undefined) return
+        tab.commits = { kind: 'loading' }
+        // A reload re-reads the expanded commits and their diffs.
+        tab.commitFiles = {}
+        tab.commitDiffs = {}
       },
       /**
        * Record the commit list.
@@ -229,7 +233,10 @@ export function createReviewStore() {
        */
       filesLoading: (draft, tabId) => {
         const tab = draft.byTab[tabId]
-        if (tab !== undefined) tab.files = { kind: 'loading' }
+        if (tab === undefined) return
+        tab.files = { kind: 'loading' }
+        // A reload re-reads every open file; drop the cached contents.
+        tab.fileContent = {}
       },
       /**
        * Record the workspace file tree.

@@ -603,7 +603,8 @@ export class WorkspaceReview extends TypertRemoteService {
    */
   contextOf(context) {
     const value = typeof context === 'number' && Number.isFinite(context) ? Math.trunc(context) : 3
-    return Math.min(200, Math.max(0, value))
+    // A large value is the "whole file" request; the byte cap still bounds it.
+    return Math.min(100000, Math.max(0, value))
   }
 
   /**

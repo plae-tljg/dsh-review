@@ -190,6 +190,8 @@ async function renderRounds() {
 test('the Rounds view renders a round, its tree, and the selected diff', async () => {
   const html = await renderRounds()
   assert.match(html, /data-review-state="rounds"/)
+  // Rounds is live from the snapshot, so it has no reload control.
+  assert.doesNotMatch(html, /data-review-reload/)
   assert.match(html, /round\.label/)
   assert.match(html, />src</)
   assert.match(html, /app\.ts/)
@@ -248,8 +250,12 @@ test('the diff header opens the file and defaults to no wrap', async () => {
   assert.match(html, /data-wrap="off"/)
   assert.match(html, /data-kind="del"/)
   assert.match(html, /data-kind="add"/)
-  // The context-size control travels with a diff that has hunks.
+  // The context-size control travels with a diff that has hunks, and offers
+  // the whole-file option.
   assert.match(html, /data-review-context/)
+  assert.match(html, /value="all"/)
+  // Uncommitted carries a reload control.
+  assert.match(html, /data-review-reload/)
 })
 
 test('a long unchanged run folds behind a gap row', async () => {
@@ -342,6 +348,8 @@ test('the Files view shows a tree and the selected content', async () => {
   assert.match(html, /notes\.md/)
   assert.match(html, /data-review-file="notes\.md"/)
   assert.match(html, /hello/)
+  // Files carries a reload control; Rounds (below) does not.
+  assert.match(html, /data-review-reload/)
 })
 
 test('the Files tree starts collapsed, offers collapse-all, and leads the switch', async () => {

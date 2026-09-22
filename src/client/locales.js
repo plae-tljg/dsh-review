@@ -58,6 +58,7 @@ export const zh = {
   'diff.open': '在新标签页打开',
   'diff.fold': '{count} 行未变更',
   'diff.context': '上下文',
+  'diff.contextAll': '全部',
   'diff.hunk': '第 {start} 行起',
   'diff.select': '从左侧选一个文件查看差异。',
 
@@ -138,6 +139,7 @@ export const en = {
   'diff.open': 'Open in a tab',
   'diff.fold': '{count} unchanged lines',
   'diff.context': 'Context',
+  'diff.contextAll': 'All',
   'diff.hunk': 'from line {start}',
   'diff.select': 'Pick a file on the left to see its diff.',
 

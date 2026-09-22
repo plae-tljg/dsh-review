@@ -325,6 +325,9 @@ function DirectoryRows({ node, depth, selected, collapsed, showCounts, plain, on
 /** A run of unchanged lines longer than this folds behind one row. */
 const FOLD_MIN = 6
 
+/** The context size that asks Git for the whole file. */
+const ALL_CONTEXT = 100000
+
 /** One numbered diff line. */
 function DiffLine({ line }) {
   return (
@@ -438,13 +441,14 @@ function DiffBody({ state, path, t, wrap, onOpen, context, onContext }) {
               <span>{t('diff.context')}</span>
               <select
                 className={css.contextSelect}
-                value={String(context)}
-                onChange={(event) => onContext(Number(event.target.value))}
+                value={context >= ALL_CONTEXT ? 'all' : String(context)}
+                onChange={(event) => onContext(event.target.value === 'all' ? ALL_CONTEXT : Number(event.target.value))}
                 data-review-context
               >
                 <option value="3">3</option>
                 <option value="10">10</option>
                 <option value="30">30</option>
+                <option value="all">{t('diff.contextAll')}</option>
               </select>
             </label>
             <button
@@ -880,6 +884,13 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   )
 
   const onRefresh = () => { refresh(tab.id, signal) }
+  // One reload control per source: the report for Uncommitted, the tree for
+  // Files, the log for Commits. Rounds is live from the conversation snapshot.
+  const onReload = () => {
+    if (source === 'files') listFiles(tab.id, signal)
+    else if (source === 'commits') listCommits(tab.id, signal)
+    else refresh(tab.id, signal)
+  }
 
   const splitStyle = { '--review-list-width': `${String(listWidth)}px` }
   const dividerProps = {
@@ -974,13 +985,14 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
           <EditGlyph />
         </button>
       )}
-      {source === 'git' && (
+      {source !== 'rounds' && (
         <button
           type="button"
           className={css.action}
-          onClick={onRefresh}
+          onClick={onReload}
           aria-label={t('refresh')}
           title={t('refresh')}
+          data-review-reload
         >
           ⟳
         </button>
@@ -1275,7 +1287,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
               ? <p className={css.notice}>{t('diff.select')}</p>
               : heldCommitDiff === undefined
                 ? <p className={css.notice}>{t('refreshing')}</p>
-                : <DiffBody state={heldCommitDiff} path={commitPath} t={t} wrap={wrap} onOpen={openInTab} />}
+                : <DiffBody state={heldCommitDiff} path={commitPath} t={t} wrap={wrap} onOpen={openInTab} context={context} onContext={(value) => actions.setContext(tab.id, value)} />}
           </div>
         </div>
       </div>
