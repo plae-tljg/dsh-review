@@ -253,12 +253,9 @@
   transition: transform 120ms ease;
 }
 
+/* The base glyph points right (collapsed); expanded points down. */
 .chevron[data-expanded='true'] {
-  transform: rotate(0deg);
-}
-
-.chevron:not([data-expanded='true']) {
-  transform: rotate(-90deg);
+  transform: rotate(90deg);
 }
 
 /* The file/folder glyph column, sized to line names up across both row kinds. */
