@@ -21,6 +21,19 @@
 const READ_TIMEOUT_MS = 20_000
 
 /**
+ * Coerce a caller-supplied diff context onto a number.
+ *
+ * The wire codec rejects a non-number, and a call site that forgets the
+ * argument would otherwise pass the AbortSignal into its place; defaulting here
+ * makes such a slip degrade to the standard context instead of failing the read.
+ * @param {unknown} context - The caller's value.
+ * @returns {number} A finite line count, or 3.
+ */
+function contextSize(context) {
+  return typeof context === 'number' && Number.isFinite(context) ? context : 3
+}
+
+/**
  * Settle a read against a deadline, folding every rejection into the failure
  * branch the caller already handles.
  * @param {Promise<object>} call - The Remote call.
@@ -115,7 +128,7 @@ export function reviewFace(remote, getConversation) {
       const key = `${tabId}\u0000${path}`
       const generation = claim(diffGenerations, key)
       actions.diffLoading(tabId, path)
-      void withDeadline(remote.workspaceReview.diff(sessionId, path, context, signal), READ_TIMEOUT_MS).then((result) => {
+      void withDeadline(remote.workspaceReview.diff(sessionId, path, contextSize(context), signal), READ_TIMEOUT_MS).then((result) => {
         if (diffGenerations.get(key) !== generation) return
         if (result.ok) actions.diffLoaded(tabId, path, result.value)
         else actions.diffFailed(tabId, path, result.error.code, result.error.message)
@@ -169,7 +182,7 @@ export function reviewFace(remote, getConversation) {
       const key = `commitDiff\u0000${tabId}\u0000${oid}\u0000${path}`
       const generation = claim(diffGenerations, key)
       actions.commitDiffLoading(tabId, oid, path)
-      void withDeadline(remote.workspaceReview.commitDiff(sessionId, oid, path, context, signal), READ_TIMEOUT_MS).then((result) => {
+      void withDeadline(remote.workspaceReview.commitDiff(sessionId, oid, path, contextSize(context), signal), READ_TIMEOUT_MS).then((result) => {
         if (diffGenerations.get(key) !== generation) return
         if (result.ok) actions.commitDiffLoaded(tabId, oid, path, result.value)
         else actions.commitDiffFailed(tabId, oid, path, result.error.code, result.error.message)

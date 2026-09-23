@@ -88,3 +88,24 @@ test('a refresh retires the read still in flight', async () => {
 test('an unmounted namespace is a stated wiring failure', () => {
   assert.throws(() => reviewFace({}), /remote\.workspaceReview is not mounted/)
 })
+
+test('a non-numeric context degrades to three lines', async () => {
+  const engine = seededStore()
+  const seen = []
+  const face = reviewFace({
+    workspaceReview: {
+      changes: async () => ({ ok: true, value: REPORT }),
+      diff: async (_session, _path, context) => {
+        seen.push(context)
+        return { ok: true, value: {} }
+      },
+    },
+  })
+  const actions = face('s1', engine.actions)
+  // The mistake this guards: the old call shape put the AbortSignal in the
+  // context slot (a panel wrapper still supplied a real signal separately), and
+  // the wire codec rejected it as "context".
+  actions.select('t1', 'a.txt', false, new AbortController().signal, new AbortController().signal)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.deepEqual(seen, [3])
+})

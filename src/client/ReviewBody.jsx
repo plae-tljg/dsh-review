@@ -1071,7 +1071,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                     active={file.path === selected}
                     depth={0}
                     t={t}
-                    onSelect={() => { select(tab.id, file.path, state.diffs[file.path] !== undefined, signal) }}
+                    onSelect={() => { select(tab.id, file.path, state.diffs[file.path] !== undefined, context, signal) }}
                   />
                 ))}
                 <p className={css.count}>{t('files.count', { count: String(files.length) })}</p>
