@@ -45,6 +45,17 @@ export const DEFAULT_CONFIG = {
 /** Stdout budget for one command; a diff larger than this is cut by the pipe, not here. */
 const MAX_BUFFER = 32 * 1024 * 1024
 
+/** Generated directories whose contents never belong in the Files browser. */
+const HEAVY_DIRS = new Set([
+  'node_modules', '__pycache__', '.venv', 'venv', '.tox',
+  '.mypy_cache', '.pytest_cache', '.ruff_cache',
+])
+
+/** Whether a repository-relative path sits under a heavy directory. */
+function isHeavyPath(path) {
+  return path.split('/').some(segment => HEAVY_DIRS.has(segment))
+}
+
 /**
  * Run one shell command to completion.
  *
@@ -481,10 +492,20 @@ export class WorkspaceReview extends TypertRemoteService {
     if (!(await this.isRepository(root, signal))) {
       return { isRepository: false, root: null, files: [], tree: { directories: [], files: [] }, count: 0, truncated: false }
     }
-    const stdout = await this.gitRun(root, [
-      'ls-files', '--cached', '--others', '--exclude-standard', '-z',
-    ], signal, 'git ls-files')
-    const paths = stdout.split('\0').filter(path => path.length > 0)
+    // Tracked + untracked, then git-ignored files too: a plain file browser
+    // should show `.env` (normally ignored), while the heavy generated
+    // directories stay out so the tree is still navigable.
+    const [listed, ignored] = await Promise.all([
+      this.gitRun(root, ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], signal, 'git ls-files'),
+      this.gitRun(root, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z'], signal, 'git ls-files --ignored'),
+    ])
+    const unique = new Set()
+    for (const output of [listed, ignored]) {
+      for (const path of output.split('\0')) {
+        if (path !== '' && !isHeavyPath(path)) unique.add(path)
+      }
+    }
+    const paths = [...unique].sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
     const truncated = paths.length > this.config.maxStatusEntries
     const files = (truncated ? paths.slice(0, this.config.maxStatusEntries) : paths).map(path => ({
       path,

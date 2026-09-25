@@ -5,7 +5,7 @@ An opencode-style **Review** panel for the [DeepSeek Harness](https://github.com
 - **Uncommitted** — the working tree against `HEAD`, as a directory tree of every changed file, with per-file `+added`/`-removed`, the branch's grand total, and the selected file's unified diff in red/green.
 - **Rounds** — what the agent changed in each conversation round, derived from the live conversation snapshot, shown with the same tree and the same diff body.
 - **Commits** — the recent commit history, newest first; a commit expands to the tree of files it touched, with its own counts, and selecting a file shows that path's diff *within* that commit. Commit files are read lazily, only when a commit is opened.
-- **Files** — a plain workspace browser: the tree of every non-ignored file (`git ls-files`, so `.gitignore` is honoured), the selected file's content on the right, and an **opt-in editor** (off by default) for direct edits. Folders start collapsed with an expand-all/collapse-all control, and the file rail is **draggable** to widen or narrow.
+- **Files** — a plain workspace browser: the tree of the workspace's files, **including git-ignored ones** such as `.env` (`git ls-files --cached --others` plus `--ignored`), with the heavy generated directories (`node_modules`, `__pycache__`, virtualenvs) left out; the selected file's content on the right, and an **opt-in editor** (off by default) for direct edits. Folders start collapsed with an expand-all/collapse-all control, and the file rail is **draggable** to widen or narrow.
 
 ```
 ┌ 审阅 ────────────────────────────────────────────────────────┐
@@ -39,7 +39,7 @@ The look is a deliberate port of **opencode's** right-hand review panel (see [do
 - **Renames resolve as renames.** The status listing is read for the source path and both names are diffed; a pure rename reports "no text" rather than a whole-file addition.
 - **Untracked files** are rendered by `git diff --no-index` against the null device, so Git itself decides the encoding, the binary case and the hunk header.
 - **Path-safe.** Paths reach Git as bare repository-relative pathspecs under `--literal-pathspecs`, single-quoted for the shell, so a name holding a space, a `*`, a quote or a newline round-trips exactly.
-- **A read-only workspace browser, with an opt-in editor.** The Files view lists the project (`git ls-files --cached --others --exclude-standard`), reads a file as text, and — only after the edit toggle is turned on — writes it back. A write is confined to the session workspace root, refuses a symlink, and is atomic (a sibling temp file renamed into place).
+- **A read-only workspace browser, with an opt-in editor.** The Files view lists the project (tracked, untracked, and git-ignored files, minus the heavy generated directories), reads a file as text, and — only after the edit toggle is turned on — writes it back. A write is confined to the session workspace root, refuses a symlink, and is atomic (a sibling temp file renamed into place).
 - **Nothing else writes.** Uncommitted, Rounds and Commits only read; `GIT_OPTIONAL_LOCKS=0` keeps a refresh from taking an index lock a concurrent Agent operation might want.
 
 ## Install

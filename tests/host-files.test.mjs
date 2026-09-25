@@ -10,7 +10,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG, WorkspaceReview } from '../lib/index.js'
@@ -34,25 +34,30 @@ async function inRepo(run) {
   const git = (...args) => execFileSync('git', args, { cwd: root, env })
   try {
     git('init', '-q')
-    writeFileSync(join(root, '.gitignore'), 'ignored.txt\n')
+    writeFileSync(join(root, '.gitignore'), 'ignored.txt\n.env\nnode_modules/\n')
     writeFileSync(join(root, 'tracked.txt'), 'tracked\n')
     git('add', '.gitignore', 'tracked.txt')
     git('commit', '-q', '-m', 'init')
     writeFileSync(join(root, 'ignored.txt'), 'ignored\n')
     writeFileSync(join(root, 'untracked.txt'), 'untracked\n')
+    writeFileSync(join(root, '.env'), 'SECRET=1\n')
+    mkdirSync(join(root, 'node_modules/pkg'), { recursive: true })
+    writeFileSync(join(root, 'node_modules/pkg/index.js'), 'x\n')
     await run(root, git)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
 }
 
-test('listFiles returns tracked and untracked files, not ignored ones', async () => {
+test('listFiles returns tracked, untracked and ignored files, minus heavy dirs', async () => {
   await inRepo(async (root) => {
     const report = await serviceAt(root).listFiles({ session: {} }, new AbortController().signal)
     assert.equal(report.isRepository, true)
     const paths = report.files.map(file => file.path).sort()
-    assert.deepEqual(paths, ['.gitignore', 'tracked.txt', 'untracked.txt'])
-    assert.equal(report.count, 3)
+    // `.env` and `ignored.txt` are git-ignored but still listed; node_modules is not.
+    assert.deepEqual(paths, ['.env', '.gitignore', 'ignored.txt', 'tracked.txt', 'untracked.txt'])
+    assert.equal(report.count, 5)
+    assert.ok(!paths.some(path => path.includes('node_modules')))
     // The tree groups them; a root-level file sits in `files`.
     assert.ok(report.tree.files.some(file => file.path === 'tracked.txt'))
   })
