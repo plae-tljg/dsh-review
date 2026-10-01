@@ -21,6 +21,7 @@
 import { FileTypeIcon } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import css from './ReviewBody.module.css'
+import { sessionFileAddress } from './file-address.js'
 import { deriveRounds, lineDiff } from './rounds.js'
 import { loadView, saveView } from './view-state.js'
 
@@ -414,7 +415,7 @@ function Hunk({ hunk, expandAll, t }) {
  * @param {object} props - Body props.
  * @returns {import('react').ReactNode} The diff.
  */
-function DiffBody({ state, path, t, wrap, onOpen, context, onContext }) {
+function DiffBody({ state, path, t, wrap, onOpen, openBlocked, context, onContext }) {
   const [expandAll, setExpandAll] = useState(false)
   const copy = useCallback(() => {
     if (state.kind !== 'ready' || state.diff.patch === '') return
@@ -462,7 +463,15 @@ function DiffBody({ state, path, t, wrap, onOpen, context, onContext }) {
           </>
         )}
         {onOpen !== undefined && (
-          <button type="button" className={css.copy} onClick={() => onOpen(path)} title={t('diff.open')} data-review-open>
+          <button
+            type="button"
+            className={css.copy}
+            onClick={() => onOpen(path)}
+            title={openBlocked ? t('diff.open.blocked') : t('diff.open')}
+            disabled={openBlocked}
+            data-review-open
+            data-review-open-blocked={openBlocked ? 'on' : undefined}
+          >
             {t('diff.open')}
           </button>
         )}
@@ -474,6 +483,10 @@ function DiffBody({ state, path, t, wrap, onOpen, context, onContext }) {
       </div>
       {diff.untracked && <p className={css.hint}>{t('diff.untracked')}</p>}
       {diff.truncated && <p className={css.hint}>{t('diff.truncated')}</p>}
+      {/* The opener can be refused by the host panel (its editor tab is switched
+          off), and a button that silently does nothing is worse than none: the
+          reason is stated where the button sits. */}
+      {openBlocked && <p className={css.hint}>{t('diff.open.blocked')}</p>}
       {file === null
         ? <p className={css.notice}>{t('diff.empty')}</p>
         : file.hunks.length === 0
@@ -504,8 +517,9 @@ function numberLines(rows) {
   })
 }
 
-function RoundDiffBody({ round, file, t, wrap, onOpen }) {
+function RoundDiffBody({ round, file, t, wrap, onOpen, openBlocked }) {
   const [expandAll, setExpandAll] = useState(false)
+  const blockedHint = openBlocked ? <p className={css.hint}>{t('diff.open.blocked')}</p> : null
   const head = (
     <div className={css.diffHead}>
       <span className={css.renameFrom}>{t('round.label', { turn: String(round.turn) })} · </span>
@@ -521,7 +535,15 @@ function RoundDiffBody({ round, file, t, wrap, onOpen }) {
         </button>
       )}
       {onOpen !== undefined && (
-        <button type="button" className={css.copy} onClick={() => onOpen(file.path)} title={t('diff.open')} data-review-open>
+        <button
+          type="button"
+          className={css.copy}
+          onClick={() => onOpen(file.path)}
+          title={openBlocked ? t('diff.open.blocked') : t('diff.open')}
+          disabled={openBlocked}
+          data-review-open
+          data-review-open-blocked={openBlocked ? 'on' : undefined}
+        >
           {t('diff.open')}
         </button>
       )}
@@ -531,6 +553,7 @@ function RoundDiffBody({ round, file, t, wrap, onOpen }) {
     return (
       <div className={css.diffScroll} data-wrap={wrap ? 'on' : 'off'} data-review-round-diff={file.path}>
         {head}
+        {blockedHint}
         <p className={css.notice}>{t('round.deleted')}</p>
       </div>
     )
@@ -539,6 +562,7 @@ function RoundDiffBody({ round, file, t, wrap, onOpen }) {
     return (
       <div className={css.diffScroll} data-wrap={wrap ? 'on' : 'off'} data-review-round-diff={file.path}>
         {head}
+        {blockedHint}
         <p className={css.notice}>{t('diff.noBody')}</p>
       </div>
     )
@@ -546,6 +570,7 @@ function RoundDiffBody({ round, file, t, wrap, onOpen }) {
   return (
     <div className={css.diffScroll} data-wrap={wrap ? 'on' : 'off'} data-review-round-diff={file.path}>
       {head}
+      {blockedHint}
       {file.hunks.map((hunk, index) => (
         <div className={css.hunk} key={index}>
           <div className={css.hunkHeader}>
@@ -563,9 +588,17 @@ function RoundDiffBody({ round, file, t, wrap, onOpen }) {
  * @param {object} props - File, draft, edit state, and callbacks.
  * @returns {import('react').ReactNode} The body.
  */
-function FileBody({ file, draft, editMode, save, onChange, onSave, onRevert, onOpen, wrap, t }) {
+function FileBody({ file, draft, editMode, save, onChange, onSave, onRevert, onOpen, openBlocked, wrap, t }) {
   const openButton = onOpen !== undefined && (
-    <button type="button" className={css.copy} onClick={() => onOpen(file.path)} title={t('diff.open')} data-review-open>
+    <button
+      type="button"
+      className={css.copy}
+      onClick={() => onOpen(file.path)}
+      title={openBlocked ? t('diff.open.blocked') : t('diff.open')}
+      disabled={openBlocked}
+      data-review-open
+      data-review-open-blocked={openBlocked ? 'on' : undefined}
+    >
       {t('diff.open')}
     </button>
   )
@@ -621,7 +654,7 @@ function FileBody({ file, draft, editMode, save, onChange, onSave, onRevert, onO
  * @param {object} props - The Slot shares this registration derives.
  * @returns {import('react').ReactNode} The tab body.
  */
-export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, select, open, listCommits, openCommit, openCommitDiff, listFiles, openFileContent, saveFile, t, conversation, sessionId, openFile }) {
+export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, select, open, listCommits, openCommit, openCommitDiff, listFiles, openFileContent, saveFile, t, conversation, sessionId, openFile, openBlocked }) {
   const { tab } = useTabInfo()
   const { signal } = tab
   const state = useStore(store => store.byTab[tab.id])
@@ -638,11 +671,13 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   const listDrag = useRef(null)
   // Opening a file in a viewer tab: the panel supplies its own opener, while
   // the native seat builds a `dsh-resource://file` address for the session and
-  // the repository-relative path.
+  // the repository-relative path. The address is encoded by the harness's own
+  // grammar, not by interpolation, so a path holding `#`, `?`, `%` or a space
+  // still names the file it was built from.
   const openInTab = useMemo(() => {
     if (openFile !== undefined) return openFile
     if (sessionId === undefined || typeof tab.actions?.openResource !== 'function') return undefined
-    return (path) => { tab.actions.openResource(`dsh-resource://file/session/${sessionId}/${path}`) }
+    return (path) => { tab.actions.openResource(sessionFileAddress(sessionId, path)) }
   }, [openFile, sessionId, tab])
 
   useEffect(() => {
@@ -1020,6 +1055,9 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
         <div className={css.root} data-review-state="not-repository">
           {header}
           <p className={css.notice}>{t('notRepository')}</p>
+          {/* Uncommitted and Commits need Git; Files does not, so the notice
+              says where the workspace can still be read. */}
+          <p className={css.hint}>{t('notRepository.hint')}</p>
           <button type="button" className={css.action} onClick={onRefresh}>{t('reload')}</button>
         </div>
       )
@@ -1082,7 +1120,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                   ? <p className={css.notice}>{t('diff.select')}</p>
                   : held === undefined
                     ? <p className={css.notice}>{t('refreshing')}</p>
-                    : <DiffBody state={held} path={selected} t={t} wrap={wrap} onOpen={openInTab} context={context} onContext={(value) => actions.setContext(tab.id, value)} />}
+                    : <DiffBody state={held} path={selected} t={t} wrap={wrap} onOpen={openInTab} openBlocked={openBlocked} context={context} onContext={(value) => actions.setContext(tab.id, value)} />}
               </div>
             </div>
           )}
@@ -1105,7 +1143,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
         </div>
       )
     }
-    if (!filesState.report.isRepository) {
+    if (!filesState.report.isRepository && filesState.report.files.length === 0) {
       return <div className={css.root} data-review-state="not-repository">{header}<p className={css.notice}>{t('notRepository')}</p></div>
     }
     const heldFile = filePath === null ? undefined : fileContent[filePath]
@@ -1113,6 +1151,9 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
     return (
       <div className={css.root} data-review-state="files">
         {header}
+        {/* The tree came from the directory itself rather than from Git, so the
+            view says which source answered instead of claiming a repository. */}
+        {!filesState.report.isRepository && <p className={css.hint} data-review-plain>{t('files.plain')}</p>}
         {filesState.report.truncated && <p className={css.hint}>{t('truncated')}</p>}
         <div className={css.split} style={splitStyle}>
           <div className={css.list}>
@@ -1162,6 +1203,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                       onSave={() => { void saveFile(tab.id, openContent.path, fileDraft ?? openContent.text, signal) }}
                       onRevert={() => actions.setFileDraft(tab.id, openContent.text)}
                       onOpen={openInTab}
+                      openBlocked={openBlocked}
                       wrap={wrap}
                       t={t}
                     />
@@ -1287,7 +1329,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
               ? <p className={css.notice}>{t('diff.select')}</p>
               : heldCommitDiff === undefined
                 ? <p className={css.notice}>{t('refreshing')}</p>
-                : <DiffBody state={heldCommitDiff} path={commitPath} t={t} wrap={wrap} onOpen={openInTab} context={context} onContext={(value) => actions.setContext(tab.id, value)} />}
+                : <DiffBody state={heldCommitDiff} path={commitPath} t={t} wrap={wrap} onOpen={openInTab} openBlocked={openBlocked} context={context} onContext={(value) => actions.setContext(tab.id, value)} />}
           </div>
         </div>
       </div>
@@ -1367,7 +1409,7 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
           <div className={css.body}>
               {selectedRound === undefined || selectedRoundFile === undefined
                 ? <p className={css.notice}>{t('round.select')}</p>
-                : <RoundDiffBody round={selectedRound} file={selectedRoundFile} t={t} wrap={wrap} onOpen={openInTab} />}
+                : <RoundDiffBody round={selectedRound} file={selectedRoundFile} t={t} wrap={wrap} onOpen={openInTab} openBlocked={openBlocked} />}
             </div>
           </div>
         )}

@@ -27,15 +27,29 @@ const profileRequire = createRequire(`${process.env.HOME}/.dsh/profiles/web/pack
  * Resolve one client-baseline specifier.
  *
  * The shell seeds `client-store`, so a profile never installs it and the harness
- * checkout is where the test finds it; React and React DOM are profile
+ * checkout is where the test finds it; React and React DOM are harness
  * dependencies, so they come from there.
  * @param {string} specifier - An npm specifier.
  * @returns {any} The loaded module.
  */
+const harnessRequire = createRequire('/home/lkm/00app/03repo/deepseek-harness/package.json')
+const reactPath = '/home/lkm/00app/03repo/deepseek-harness/node_modules/.pnpm/react@18.3.1/node_modules/react/index.js'
+const reactDomServerPath = '/home/lkm/00app/03repo/deepseek-harness/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/server.js'
+
 function clientRequire(specifier) {
-  return specifier === '@deepseek-ai/dsh-client-store'
-    ? createRequire(import.meta.url)(specifier)
-    : profileRequire(specifier)
+  if (specifier === '@deepseek-ai/dsh-client-store') {
+    return createRequire(import.meta.url)(specifier)
+  }
+  if (specifier === 'react-dom/server') {
+    return createRequire(reactDomServerPath)(specifier)
+  }
+  if (specifier === 'react') {
+    return createRequire(reactPath)(specifier)
+  }
+  if (specifier === 'react/jsx-runtime') {
+    return createRequire(reactPath)('react/jsx-runtime')
+  }
+  return profileRequire(specifier)
 }
 
 /** Build a report shaped exactly as the Host sends it. */
@@ -258,6 +272,41 @@ test('the diff header opens the file and defaults to no wrap', async () => {
   assert.match(html, /data-review-reload/)
 })
 
+test('a refused opener is stated instead of offered as a dead button', async () => {
+  // better-sidebar opens a file through its `editor` tab, and refuses a
+  // disabled type with a console warning only. The body is told, so the button
+  // is disabled and the reason is on screen rather than in the console.
+  const diff = {
+    untracked: false,
+    truncated: false,
+    patch: '@@ -1 +1 @@',
+    file: {
+      path: 'src/client/ReviewBody.tsx',
+      oldPath: null,
+      binary: false,
+      notice: null,
+      hunks: [{
+        header: '',
+        oldStart: 1,
+        newStart: 1,
+        oldCount: 1,
+        newCount: 1,
+        lines: [
+          { kind: 'del', text: 'old', oldNumber: 1, newNumber: null },
+          { kind: 'add', text: 'new', oldNumber: null, newNumber: 1 },
+        ],
+      }],
+    },
+  }
+  const html = await renderBody(reportFixture(), {
+    diffs: { 'src/client/ReviewBody.tsx': { kind: 'ready', diff } },
+    extra: { sessionId: 's1', openFile: () => {}, openBlocked: true },
+  })
+  assert.match(html, /data-review-open-blocked="on"/)
+  assert.match(html, /disabled=""/)
+  assert.match(html, /diff\.open\.blocked/)
+})
+
 test('a long unchanged run folds behind a gap row', async () => {
   const context = Array.from({ length: 10 }, (_, index) => ({
     kind: 'ctx', text: `line ${String(index)}`, oldNumber: index + 1, newNumber: index + 1,
@@ -381,6 +430,35 @@ test('the body reports a non-repository workspace', async () => {
   })
   assert.match(html, /data-review-state="not-repository"/)
   assert.match(html, /notRepository/)
+  // The notice points at the source that still works without Git.
+  assert.match(html, /notRepository\.hint/)
+})
+
+test('the Files view lists a directory that is not a Git work tree', async () => {
+  // The Files source is a workspace browser, so a folder outside Git still gets
+  // a tree: the report carries the walked listing and says which source it came
+  // from, instead of the Uncommitted view's "not a repository" notice.
+  const entry = {
+    path: 'notes.md', status: 'modified', index: ' ', worktree: ' ', staged: false,
+    unstaged: false, untracked: false, renamedFrom: null, added: null, removed: null,
+  }
+  const html = await renderBody(reportFixture(), {
+    bucket: {
+      source: 'files',
+      files: {
+        kind: 'ready',
+        report: { isRepository: false, root: '/plain', count: 1, truncated: false, files: [entry], tree: { directories: [], files: [entry] } },
+      },
+      filePath: 'notes.md',
+      fileContent: { 'notes.md': { kind: 'ready', file: { path: 'notes.md', binary: false, truncated: false, bytes: 6, text: 'hello\n' } } },
+    },
+  })
+  assert.match(html, /data-review-state="files"/)
+  assert.doesNotMatch(html, /data-review-state="not-repository"/)
+  assert.match(html, /data-review-plain/)
+  assert.match(html, /files\.plain/)
+  assert.match(html, /notes\.md/)
+  assert.match(html, /hello/)
 })
 
 /** Load the built client bundle and hand back its `apply`. */

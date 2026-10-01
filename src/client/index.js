@@ -24,6 +24,7 @@
 import TYPERT_REMOTE from './remote.js'
 import { REVIEW_ID, reviewDefinition } from './definition.js'
 import { reviewFace } from './face.js'
+import { sessionFileAddress } from './file-address.js'
 import { ReviewBody } from './ReviewBody.jsx'
 import { REVIEW_PANEL_ID, ReviewPanelBody } from './panel.jsx'
 import { createReviewStore } from './store.js'
@@ -89,17 +90,50 @@ function panelApply(ctx) {
     description: () => t('guide.description'),
     order: 30,
     single: true,
-    component: (props) => (
-      <ReviewPanelBody
-        panel={props.store}
-        scope={props.scope}
-        tab={props.tab}
-        face={face}
-        store={store}
-        t={t}
-        openFile={props.onOpenFile ?? ((path) => { panel.openFile(props.scope, path) })}
-      />
-    ),
+    component: (props) => {
+      // Two openers exist for a file, and the panel's own is not always usable.
+      //
+      // better-sidebar opens a file through its built-in `editor` tab, and its
+      // `openTab` refuses a disabled type with nothing but a console warning —
+      // so with that tab switched off in the side card settings, this action
+      // would be a button that silently does nothing. The column's own
+      // `openResource` is not gated that way, so it is tried when the panel's
+      // opener is switched off, and only if that too is unavailable does the
+      // body state the reason instead of offering a dead button.
+      const opener = props.onOpenFile
+      const editorOff = typeof panel.isTabEnabled === 'function' && panel.isTabEnabled('editor') === false
+      /** The DSH right column, read lazily: a harness without it must not stall this child. */
+      const column = ctx.get('sidebarRight')
+      const columnOpen = column === undefined || typeof column.openResource !== 'function'
+        ? undefined
+        : (path) => {
+          try {
+            column.openResource(sessionFileAddress(props.scope.sessionId, path))
+            return true
+          } catch (error) {
+            // Nothing to draw into (no seat mounted): the panel's opener is the
+            // fallback, and the browser console keeps the reason.
+            console.warn('dsh-review: the right column refused the file address', error)
+            return false
+          }
+        }
+      const panelOpen = (path) => { panel.openFile(props.scope, path) }
+      const open = opener ?? (editorOff
+        ? (path) => { if (columnOpen?.(path) !== true) panelOpen(path) }
+        : panelOpen)
+      return (
+        <ReviewPanelBody
+          panel={props.store}
+          scope={props.scope}
+          tab={props.tab}
+          face={face}
+          store={store}
+          t={t}
+          openFile={open}
+          openBlocked={opener === undefined && columnOpen === undefined && editorOff}
+        />
+      )
+    },
   }), 'dsh-review: panel tab')
 }
 

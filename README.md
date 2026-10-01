@@ -5,7 +5,7 @@ An opencode-style **Review** panel for the [DeepSeek Harness](https://github.com
 - **Uncommitted** — the working tree against `HEAD`, as a directory tree of every changed file, with per-file `+added`/`-removed`, the branch's grand total, and the selected file's unified diff in red/green.
 - **Rounds** — what the agent changed in each conversation round, derived from the live conversation snapshot, shown with the same tree and the same diff body.
 - **Commits** — the recent commit history, newest first; a commit expands to the tree of files it touched, with its own counts, and selecting a file shows that path's diff *within* that commit. Commit files are read lazily, only when a commit is opened.
-- **Files** — a plain workspace browser: the tree of the workspace's files, **including git-ignored ones** such as `.env` (`git ls-files --cached --others` plus `--ignored`), with the heavy generated directories (`node_modules`, `__pycache__`, virtualenvs) left out; the selected file's content on the right, and an **opt-in editor** (off by default) for direct edits. Folders start collapsed with an expand-all/collapse-all control, and the file rail is **draggable** to widen or narrow.
+- **Files** — a plain workspace browser: the tree of the workspace's files, **including git-ignored ones** such as `.env` (`git ls-files --cached --others` plus `--ignored`), with the heavy generated directories (`node_modules`, `__pycache__`, virtualenvs) left out; the selected file's content on the right, and an **opt-in editor** (off by default) for direct edits. It is a *file* browser, not a repository browser: a folder that is not a Git work tree is walked directly, so the tree is there with or without `git`. Folders start collapsed with an expand-all/collapse-all control, and the file rail is **draggable** to widen or narrow.
 
 ```
 ┌ 审阅 ────────────────────────────────────────────────────────┐
@@ -26,20 +26,20 @@ The look is a deliberate port of **opencode's** right-hand review panel (see [do
 ## What it does
 
 - **A directory tree, not a flat list.** Files group under folders, each folder row carries the totals for everything below it, and a chain of single-child directories is folded into one row (`src/client/`) — the same shape opencode's review pane uses. Root-level files sit beside the tree. A header toggle hides the per-folder aggregates when only the files matter.
-- **A viewer escape hatch.** Every changed file has an **Open in a tab** action in its diff header, which opens the file in the sidebar's own file viewer (the native document preview, or `dsh-better-sidebar`'s editor) so it can be read without the diff decoration.
+- **A viewer escape hatch.** Every changed file has an **Open in a tab** action in its diff header, which opens the file in the sidebar's own file viewer (the native document preview, or `dsh-better-sidebar`'s editor) so it can be read without the diff decoration. The address is built by the harness's own grammar — every id and path segment encoded — so a name holding a space, `#`, `?` or `%` opens *that* file and not a truncated path nothing can claim. When the panel's own opener is switched off (better-sidebar's `editor` tab is disabled in the side card settings, which its `openTab` refuses with a console warning only), the column's `openResource` is used instead, and if neither can serve the click the button is disabled with the reason on screen rather than silently doing nothing.
 - **Word wrap and horizontal scrolling.** A long line scrolls sideways by default; a header toggle turns on word wrap. Both the Uncommitted and the Rounds diff bodies honour it.
 - **Filter and remember.** Every rail carries a sticky filter box that narrows the tree, the rounds or the commits (a commit matches by subject/short hash or by a file it touched). The chosen source, rail width, wrap/fold toggles, filter and open file are remembered per session in `localStorage`, so reopening lands where you left off.
 - **Foldable diffs.** Hunk context is adjustable (3/10/30 lines, or **All** to pull the whole file), re-read from Git; a run of unchanged lines longer than six folds behind one `N unchanged lines` row, and an expand-all control opens every fold at once.
-- **Reload in place.** Uncommitted, Files and Commits each carry a reload control (⟳); Rounds is live from the conversation snapshot and needs none.
+- **Reload in place.** Uncommitted, Files and Commits each carry a reload control (⟳); Rounds is live from the conversation snapshot and needs none. A reload re-reads the open diff body as well as the tree — a body is only valid for the report that produced it.
 - **Every uncommitted change**, staged, unstaged and untracked, from `git status --porcelain=v1 -z`.
 - **Per-file counts** from `git diff --numstat -z`, with a binary change marked `bin` rather than `+0 -0`, plus the **grand total** across the report.
 - **A real unified diff**, parsed on the Host into hunks: context lines appear once, additions and deletions each carry their own gutter number, and every hunk opens with its `@@ -a,b +c,d @@` coordinates.
 - **Per-round changes**, derived client-side from the conversation snapshot: each round's tool calls (`write` / `edit` / `str_replace_editor`, and Code Mode `run_code` sub-calls) are folded into the files they touched, and `rm`-family deletions are kept as display-only rows.
 - **Per-commit changes**, read from `git log` and `git show`: a commit's file list comes from `--name-status` + `--numstat`, and its per-path diff from `git show <oid> -- <path>`, so the same tree and red/green body render a historical change.
 - **Renames resolve as renames.** The status listing is read for the source path and both names are diffed; a pure rename reports "no text" rather than a whole-file addition.
-- **Untracked files** are rendered by `git diff --no-index` against the null device, so Git itself decides the encoding, the binary case and the hunk header.
+- **Untracked files** are rendered by `git diff --no-index` against the null device, so Git itself decides the encoding, the binary case and the hunk header. The index — Git's own answer to "is this tracked" — decides which paths take that route, so a path Git tracks is never drawn as its own whole-file addition.
 - **Path-safe.** Paths reach Git as bare repository-relative pathspecs under `--literal-pathspecs`, single-quoted for the shell, so a name holding a space, a `*`, a quote or a newline round-trips exactly.
-- **A read-only workspace browser, with an opt-in editor.** The Files view lists the project (tracked, untracked, and git-ignored files, minus the heavy generated directories), reads a file as text, and — only after the edit toggle is turned on — writes it back. A write is confined to the session workspace root, refuses a symlink, and is atomic (a sibling temp file renamed into place).
+- **A read-only workspace browser, with an opt-in editor.** The Files view lists the workspace (tracked, untracked, and git-ignored files inside a work tree; a directory walk outside one — both minus the heavy generated directories), reads a file as text, and — only after the edit toggle is turned on — writes it back. A write is confined to the session workspace root, refuses a symlink, and is atomic (a sibling temp file renamed into place).
 - **Nothing else writes.** Uncommitted, Rounds and Commits only read; `GIT_OPTIONAL_LOCKS=0` keeps a refresh from taking an index lock a concurrent Agent operation might want.
 
 ## Install
@@ -85,18 +85,32 @@ Two artifacts come out:
 npm test
 ```
 
-`tests/parse.test.mjs` runs the Host parsers over recorded `git` output; `tests/rounds.test.mjs` drives the round derivation against a hand-built snapshot; `tests/face.test.mjs` covers the deadline-guarded reads; `tests/client-wiring.test.mjs` loads `lib/client.js` in a VM and asserts every registration; `tests/render.test.mjs` renders the tree and both sources through `react-dom/server`.
+`tests/parse.test.mjs` runs the Host parsers over recorded `git` output; `tests/host-diff.test.mjs` pins which paths take the null-device route and which must not; `tests/host-files.test.mjs` and `tests/host-commits.test.mjs` drive the Files and commit reads against throwaway repositories (and a plain directory outside Git); `tests/rounds.test.mjs` drives the round derivation against a hand-built snapshot; `tests/face.test.mjs` covers the deadline-guarded reads and the refresh that drops a stale body; `tests/file-address.test.mjs` holds the address builder to the harness's own expectations; `tests/client-wiring.test.mjs` loads `lib/client.js` in a VM and asserts every registration, including which opener the panel resolves; `tests/render.test.mjs` renders the tree and both sources through `react-dom/server`.
+
+`npm test` builds first, so it needs `DSH_CHECKOUT` pointed at a harness checkout (the default is the author's path, not yours). A fresh clone also has no `node_modules`: the harness-owned specifiers (`@deepseek-ai/dsh-typert-protocol` for the Host tests, `@deepseek-ai/dsh-client-store` for the render tests) must resolve from the clone, while React and React DOM come from the active web profile. Link or install those rows, and put the checkout's `react`/`scheduler` on `NODE_PATH` if the profile's copies are missing:
+
+```sh
+H=/path/to/deepseek-harness
+mkdir -p node_modules/@deepseek-ai
+ln -sfn $H/packages/typert/protocol   node_modules/@deepseek-ai/dsh-typert-protocol
+ln -sfn $H/packages/client/store      node_modules/@deepseek-ai/dsh-client-store
+ln -sfn $H/packages/client/ui-primitives node_modules/@deepseek-ai/dsh-client-ui-primitives
+ln -sfn $H/packages/client/ui-slots   node_modules/@deepseek-ai/dsh-client-ui-slots
+ln -sfn $H/node_modules/.pnpm/zod@4.4.3/node_modules/zod node_modules/zod
+DSH_CHECKOUT=$H NODE_PATH=$H/node_modules/.pnpm/react@18.3.1/node_modules:$H/node_modules/.pnpm/scheduler@0.23.2/node_modules npm test
+```
 
 ## Architecture
 
 ```
 src/index.js               Host plugin entry: re-exports the service
-src/host/review.js         WorkspaceReview — the `workspaceReview` Remote service (git reads)
+src/host/review.js         WorkspaceReview — the `workspaceReview` Remote service (git reads, plus the Files walk)
 src/host/unified.js        unified-diff, --numstat, status and tree parsers
 src/client/index.js        Browser entry: mount, native, and panel children
 src/client/remote.js       the client Remote contribution: codecs + namespace merges
 src/client/definition.js   the `review` tab type
 src/client/face.js         async reads; deadline-guarded, generation-guarded
+src/client/file-address.js the `dsh-resource://file/…` address grammar (encoded segments)
 src/client/store.js        per-tab view state (report, diffs, source, selection)
 src/client/ReviewBody.jsx  the source switch, the tree, and both diff renderers
 src/client/rounds.js       per-round derivation ported from dsh-file-review-tab
@@ -124,11 +138,14 @@ Deployment caps are the service's Cordis config:
 
 ## Known limitations
 
-- **Uncommitted list is memory-only and unrefreshed.** It reads when the tab mounts and when you press ⟳; there is no filesystem watch. The Rounds view follows the conversation live.
+- **Uncommitted list is memory-only and unrefreshed.** It reads when the tab mounts and when you press ⟳; there is no filesystem watch. The Rounds view follows the conversation live. A ⟳ re-reads the open diff body, so a file that changed on disk is shown as it is *now*, never as the patch the old report produced.
 - **Code Mode (`run_code`) nested edits** are derived from the snapshot; the Host-side before/after recorder from the reference plugin is not ported, so an edge case that does not survive into the snapshot is not recovered.
 - **Desktop split only.** The list and the diff sit side by side above 520px and stack below it; there is no draggable divider.
 - **No word-level highlighting** and **no line comments** (opencode's inline-comment affordance is not ported).
 - **The Files editor is a plain textarea** (no syntax highlighting; the browser's own undo applies). Binary and truncation-capped files are read-only.
+- **The Files walk has no ignore rules.** Outside a work tree there is no `.gitignore` to honour, so the heavy-directory list is all that is skipped: a generated `build/` or `dist/` is listed, and a tree past `maxStatusEntries` is cut and says so.
+- **A symlinked directory is not followed.** A link that points back up its own chain would otherwise recurse forever; a symlink to a file is listed, a broken link is skipped.
+- **Opening a file depends on a viewer being enabled.** Inside `dsh-better-sidebar` the panel opens through its `editor` tab, and a side card setting that switches that tab off is honoured — the panel's own `openTab` refuses a disabled type with a console warning only. This plugin therefore falls back to the column's `openResource`, and states the reason when neither route is available.
 - **View state is per browser profile.** It lives in `localStorage` under the session id; clearing site data (or a private window) resets the source, width, filter and selections.
 - **Mode-only changes state no body** — a permission change appears with its counts and reads "no text".
 

@@ -26,7 +26,7 @@
 
 import { exec } from 'node:child_process'
 import { promises as fsp } from 'node:fs'
-import { dirname, resolve as resolvePath, sep } from 'node:path'
+import { dirname, join, resolve as resolvePath, sep } from 'node:path'
 import { RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { buildTree, parseNameStatus, parseNumstat, parseUnifiedDiff } from './unified.js'
 
@@ -54,6 +54,82 @@ const HEAVY_DIRS = new Set([
 /** Whether a repository-relative path sits under a heavy directory. */
 function isHeavyPath(path) {
   return path.split('/').some(segment => HEAVY_DIRS.has(segment))
+}
+
+/** Directories that are never walked: VCS metadata and the heavy generated set. */
+function isSkippedDirectory(name) {
+  return name === '.git' || HEAVY_DIRS.has(name)
+}
+
+/**
+ * Every file under one directory, as `/`-separated relative paths.
+ *
+ * The Files view is a workspace browser, so it must answer for a directory that
+ * is not a Git work tree at all — a scratch folder, a music library, a
+ * downloaded archive. `git ls-files` cannot serve that, because it answers for
+ * a repository; this walk is the fallback that keeps the view a file explorer
+ * rather than a repository viewer.
+ *
+ * Three rules keep the traversal safe and bounded:
+ *
+ * 1. **`.git` and the heavy generated directories are skipped** — the same set
+ *    the git listing excludes, so both sources produce the same shape.
+ * 2. **A symlinked directory is not followed.** A link pointing back up its own
+ *    chain would otherwise recurse forever; a symlink to a file is listed, and
+ *    a broken link is skipped.
+ * 3. **The entry cap and a directory budget both bound the walk.** A tree whose
+ *    folders hold no files cannot exhaust the traversal with a depth-only
+ *    guard, so the budget counts visited directories. Hitting either bound sets
+ *    `truncated`, which the view states rather than hiding.
+ * @param {string} root - Absolute directory to walk.
+ * @param {number} cap - Largest number of paths to return.
+ * @returns {Promise<{ paths: string[], truncated: boolean }>} Relative paths and whether a bound was hit.
+ */
+export async function walkWorkspace(root, cap) {
+  const paths = []
+  /** Directories still to visit; the stack holds relative paths, `''` is the root. */
+  const pending = ['']
+  // One directory may hold no files at all, so the entry cap alone cannot stop a
+  // deep tree; the budget is the second bound.
+  let budget = cap
+  let truncated = false
+  while (pending.length > 0) {
+    if (paths.length >= cap || budget <= 0) {
+      truncated = true
+      break
+    }
+    budget -= 1
+    const relative = /** @type {string} */ (pending.pop())
+    let entries
+    try {
+      entries = await fsp.readdir(relative === '' ? root : join(root, relative), { withFileTypes: true })
+    } catch {
+      // An unreadable directory (a permission bit, a race with a deletion) is
+      // skipped rather than failing the whole listing.
+      continue
+    }
+    const directories = []
+    for (const entry of entries) {
+      if (isSkippedDirectory(entry.name)) continue
+      const path = relative === '' ? entry.name : `${relative}/${entry.name}`
+      if (entry.isDirectory()) {
+        directories.push(path)
+        continue
+      }
+      if (entry.isSymbolicLink()) {
+        const target = await fsp.stat(join(root, path)).catch(() => null)
+        if (target === null || target.isDirectory()) continue
+      }
+      if (paths.length >= cap) {
+        truncated = true
+        break
+      }
+      paths.push(path)
+    }
+    for (const directory of directories) pending.push(directory)
+  }
+  paths.sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
+  return { paths, truncated }
 }
 
 /**
@@ -326,9 +402,14 @@ export class WorkspaceReview extends TypertRemoteService {
       ...(unborn ? ['--cached'] : ['HEAD']), '--', ...paths.map(quote),
     ]), signal)
     let untracked = false
-    if (result.code === 0 && result.stdout.length === 0 && !unborn) {
-      // No committed and no staged side means the path is untracked: read it and
-      // report its content as pure additions.
+    // Git's index is what makes a path tracked, and `git diff` cannot report a
+    // path the index does not carry — so it answers with an empty patch, not
+    // with an error. That emptiness is this call's only signal that the path is
+    // untracked, which is why the index is asked before the null-device read is
+    // taken: a *tracked* path that matches HEAD has no changes to show, and
+    // rendering it as its own whole-file addition would invent a diff that Git
+    // says does not exist.
+    if (result.code === 0 && result.stdout.length === 0 && !(await this.isTracked(root, path, signal))) {
       result = await this.untrackedPatch(root, path, signal)
       untracked = true
     }
@@ -478,36 +559,52 @@ export class WorkspaceReview extends TypertRemoteService {
   }
 
   /**
-   * Every non-ignored file of the session workspace, as a directory tree.
+   * Every file of the session workspace, as a directory tree.
    *
-   * The list comes from `git ls-files --cached --others --exclude-standard`, so
-   * `.gitignore` is honoured and the tree is the project's tracked and untracked
-   * files — not the contents of `node_modules`. Ignored files are simply absent.
+   * Inside a work tree the list comes from `git ls-files --cached --others
+   * --exclude-standard` plus `--ignored`, so `.gitignore` is honoured, `.env` is
+   * still visible, and the tree is the project's files rather than the contents
+   * of `node_modules`.
+   *
+   * The Files view is a workspace *browser*, so it does not depend on that
+   * answer: a root that is not a work tree — or a `git ls-files` that fails —
+   * falls back to {@link walkWorkspace}, which walks the directory itself. A
+   * file explorer that goes blank outside a repository is not a file explorer,
+   * and the Uncommitted view states the no-repository case on its own.
    * @param {object} agent - Target Agent resolved from the Session identity on the wire.
    * @param {AbortSignal} signal - Caller cancellation.
-   * @returns {Promise<object>} The tree report; `isRepository: false` when the root is not a work tree.
+   * @returns {Promise<object>} The tree report; `isRepository` states which source answered.
    */
   async listFiles(agent, signal) {
     const root = this.rootOf(agent)
-    if (!(await this.isRepository(root, signal))) {
-      return { isRepository: false, root: null, files: [], tree: { directories: [], files: [] }, count: 0, truncated: false }
-    }
-    // Tracked + untracked, then git-ignored files too: a plain file browser
-    // should show `.env` (normally ignored), while the heavy generated
-    // directories stay out so the tree is still navigable.
-    const [listed, ignored] = await Promise.all([
-      this.gitRun(root, ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], signal, 'git ls-files'),
-      this.gitRun(root, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z'], signal, 'git ls-files --ignored'),
-    ])
-    const unique = new Set()
-    for (const output of [listed, ignored]) {
-      for (const path of output.split('\0')) {
-        if (path !== '' && !isHeavyPath(path)) unique.add(path)
+    const isRepository = await this.isRepository(root, signal)
+    /** @type {{ paths: string[], truncated: boolean }|null} */
+    let listed = null
+    if (isRepository) {
+      // Tracked + untracked, then git-ignored files too: a plain file browser
+      // should show `.env` (normally ignored), while the heavy generated
+      // directories stay out so the tree is still navigable.
+      try {
+        const [tracked, ignored] = await Promise.all([
+          this.gitRun(root, ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], signal, 'git ls-files'),
+          this.gitRun(root, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z'], signal, 'git ls-files --ignored'),
+        ])
+        const unique = new Set()
+        for (const output of [tracked, ignored]) {
+          for (const path of output.split('\0')) {
+            if (path !== '' && !isHeavyPath(path)) unique.add(path)
+          }
+        }
+        const paths = [...unique].sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
+        listed = { paths, truncated: paths.length > this.config.maxStatusEntries }
+      } catch {
+        // A repository Git itself cannot list — a broken object store, a bare
+        // directory holding only part of a checkout — still has files on disk.
+        listed = null
       }
     }
-    const paths = [...unique].sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
-    const truncated = paths.length > this.config.maxStatusEntries
-    const files = (truncated ? paths.slice(0, this.config.maxStatusEntries) : paths).map(path => ({
+    if (listed === null) listed = await walkWorkspace(root, this.config.maxStatusEntries)
+    const files = (listed.truncated ? listed.paths.slice(0, this.config.maxStatusEntries) : listed.paths).map(path => ({
       path,
       status: 'modified',
       index: ' ',
@@ -520,7 +617,7 @@ export class WorkspaceReview extends TypertRemoteService {
       removed: null,
     }))
     files.sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
-    return { isRepository: true, root, files, tree: buildTree(files), count: files.length, truncated }
+    return { isRepository, root, files, tree: buildTree(files), count: files.length, truncated: listed.truncated }
   }
 
   /**
@@ -702,6 +799,24 @@ export class WorkspaceReview extends TypertRemoteService {
   async isRepository(root, signal) {
     const result = await run(this.git(root, ['rev-parse', '--is-inside-work-tree']), signal)
     return result.code === 0 && result.stdout.trim() === 'true'
+  }
+
+  /**
+   * Whether Git's index carries one path.
+   *
+   * The index — not HEAD — is Git's own answer to "is this path tracked": a file
+   * added but never committed is tracked, and a file committed and then removed
+   * from the index is not. The listing is taken with `-z` so a path holding a
+   * newline or a non-ASCII byte arrives raw, exactly like `changes` does.
+   * @param {string} root - Absolute workspace root.
+   * @param {string} path - Repository-relative path.
+   * @param {AbortSignal} signal - Caller cancellation.
+   * @returns {Promise<boolean>} True when the index holds the path.
+   */
+  async isTracked(root, path, signal) {
+    const result = await run(this.git(root, ['ls-files', '--cached', '-z', '--', quote(path)]), signal)
+    if (result.code !== 0) return false
+    return result.stdout.split('\0').some(entry => entry.length > 0)
   }
 
   /**

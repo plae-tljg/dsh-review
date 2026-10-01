@@ -109,3 +109,52 @@ test('a non-numeric context degrades to three lines', async () => {
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.deepEqual(seen, [3])
 })
+
+/** One report carrying a single changed path. */
+function reportWith(path, added) {
+  const row = {
+    path, status: 'modified', index: ' ', worktree: 'M', staged: false, unstaged: true,
+    untracked: false, renamedFrom: null, added, removed: 1,
+  }
+  return { ...REPORT, files: [row], tree: { directories: [], files: [row] }, added, removed: 1 }
+}
+
+test('a refresh drops the cached body so the open path is read again', async () => {
+  // The bug this exists for: a body read while the file was untracked stayed
+  // "everything is an addition" after the file was committed and edited again —
+  // the tree beside it carried the new counts, the body carried the old patch —
+  // because the report kept every cached body whose path was still listed.
+  const engine = seededStore()
+  const bodies = [
+    { untracked: true, truncated: false, patch: 'all additions', file: { path: 'a.txt', oldPath: null, binary: false, notice: null, hunks: [] } },
+    { untracked: false, truncated: false, patch: 'one hunk', file: { path: 'a.txt', oldPath: null, binary: false, notice: null, hunks: [] } },
+  ]
+  const reads = []
+  const face = reviewFace({
+    workspaceReview: {
+      changes: async () => ({ ok: true, value: reportWith('a.txt', reads.length === 0 ? 40 : 3) }),
+      diff: async () => {
+        reads.push(reads.length)
+        return { ok: true, value: bodies[reads.length - 1] }
+      },
+    },
+  })
+  const actions = face('s1', engine.actions)
+  const signal = new AbortController().signal
+  actions.start('t1', signal)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  // The first read: the path was untracked, so the body is the whole file.
+  actions.select('t1', 'a.txt', false, 3, signal)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(engine.getSnapshot().byTab.t1.diffs['a.txt'].diff.patch, 'all additions')
+  // The file is committed and edited; the reader presses ⟳.
+  actions.refresh('t1', signal)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  const held = engine.getSnapshot().byTab.t1.diffs['a.txt']
+  // Nothing cached survives the new report, so the component reads it again.
+  assert.equal(held, undefined)
+  actions.select('t1', 'a.txt', held !== undefined, 3, signal)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(reads.length, 2)
+  assert.equal(engine.getSnapshot().byTab.t1.diffs['a.txt'].diff.patch, 'one hunk')
+})

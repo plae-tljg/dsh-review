@@ -125,6 +125,26 @@ export interface WorkspaceReviewConfig {
   readonly maxDiffBytes: number
   /** Cap on reported changed files; the rest is dropped and reported cut. */
   readonly maxStatusEntries: number
+  /** Cap on the commits listed in the Commit view. */
+  readonly maxCommits: number
+  /** Largest file the Files view reads, in bytes; a larger one arrives cut. */
+  readonly maxFileBytes: number
+}
+
+/** The Files listing of one workspace, however it was read. */
+export interface ReviewFilesReport {
+  /** Whether `git ls-files` answered; `false` means the directory was walked. */
+  readonly isRepository: boolean
+  /** Absolute workspace root. */
+  readonly root: string | null
+  /** Every listed file, ordered by path. */
+  readonly files: readonly ReviewFile[]
+  /** The same files grouped into directories, with folder totals. */
+  readonly tree: object
+  /** Number of listed files. */
+  readonly count: number
+  /** The listing hit the entry cap. */
+  readonly truncated: boolean
 }
 
 /** Host Remote service reading one session workspace's uncommitted changes. */
@@ -151,7 +171,22 @@ export declare class WorkspaceReview {
    * @returns The parsed diff.
    */
   diff(agent: object, path: string, signal: AbortSignal): Promise<ReviewDiff>
+  /**
+   * Every file of the session's workspace, as a directory tree.
+   * @param agent - Target Agent resolved from the Session identity on the wire.
+   * @param signal - Caller cancellation.
+   * @returns The listing; a non-repository root is walked directly.
+   */
+  listFiles(agent: object, signal: AbortSignal): Promise<ReviewFilesReport>
 }
+
+/**
+ * Every file under one directory that is not a Git work tree.
+ * @param root - Absolute directory to walk.
+ * @param cap - Largest number of paths to return.
+ * @returns Relative paths, and whether an entry or directory bound was hit.
+ */
+export declare function walkWorkspace(root: string, cap: number): Promise<{ paths: string[], truncated: boolean }>
 
 /** The default deployment caps. */
 export declare const DEFAULT_CONFIG: WorkspaceReviewConfig

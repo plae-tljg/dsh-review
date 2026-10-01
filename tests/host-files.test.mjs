@@ -101,3 +101,55 @@ test('readFile reports a missing file', async () => {
     )
   })
 })
+
+/**
+ * Run one body against a fresh directory that is not a Git work tree, then
+ * remove it. This is the Files view's other half: a scratch folder, a music
+ * library, an unpacked archive.
+ */
+async function inPlainDir(run) {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-review-plain-'))
+  try {
+    writeFileSync(join(root, 'notes.md'), 'notes\n')
+    writeFileSync(join(root, '.env'), 'SECRET=1\n')
+    mkdirSync(join(root, 'deep/deeper'), { recursive: true })
+    writeFileSync(join(root, 'deep/deeper/leaf.txt'), 'leaf\n')
+    // VCS metadata and the heavy generated directories are never walked.
+    mkdirSync(join(root, '.git/objects'), { recursive: true })
+    writeFileSync(join(root, '.git/objects/blob'), 'x\n')
+    mkdirSync(join(root, 'node_modules/pkg'), { recursive: true })
+    writeFileSync(join(root, 'node_modules/pkg/index.js'), 'x\n')
+    mkdirSync(join(root, '__pycache__'), { recursive: true })
+    writeFileSync(join(root, '__pycache__/mod.pyc'), 'x\n')
+    await run(root)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
+
+test('listFiles lists a directory that is not a Git work tree', async () => {
+  await inPlainDir(async (root) => {
+    const report = await serviceAt(root).listFiles({ session: {} }, new AbortController().signal)
+    // The tree is served, and the report states which source answered.
+    assert.equal(report.isRepository, false)
+    assert.deepEqual(
+      report.files.map(file => file.path),
+      ['.env', 'deep/deeper/leaf.txt', 'notes.md'],
+    )
+    assert.equal(report.count, 3)
+    assert.equal(report.truncated, false)
+    // Nested files group under their directories, exactly as the Git listing does.
+    assert.deepEqual(report.tree.directories.map(node => node.name), ['deep/deeper'])
+    assert.deepEqual(report.tree.directories[0].files.map(file => file.path), ['deep/deeper/leaf.txt'])
+  })
+})
+
+test('a plain directory is readable and writable through the Files view', async () => {
+  await inPlainDir(async (root) => {
+    const service = serviceAt(root)
+    const read = await service.readFile({ session: {} }, 'notes.md', new AbortController().signal)
+    assert.equal(read.text, 'notes\n')
+    await service.writeFile({ session: {} }, 'notes.md', 'edited\n', new AbortController().signal)
+    assert.equal(readFileSync(join(root, 'notes.md'), 'utf8'), 'edited\n')
+  })
+})

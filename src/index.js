@@ -11,10 +11,11 @@
  * Every read is a git or filesystem read except the Files editor's `writeFile`
  * (opt-in, confined to the workspace root). Everything else is unchanged:
  * `status --porcelain` for the file rows, `diff --numstat` for the counts,
- * `diff` for one patch, `log`/`show` for commits, `ls-files` for the tree.
+ * `diff` for one patch, `log`/`show` for commits, `ls-files` for the tree — or
+ * a directory walk when the root is not a work tree.
  */
 
-export { WorkspaceReview, DEFAULT_CONFIG } from './host/review.js'
+export { WorkspaceReview, DEFAULT_CONFIG, walkWorkspace } from './host/review.js'
 export { parseBranchHeader, parseStatus } from './host/review.js'
 export {
   buildTree,

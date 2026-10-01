@@ -150,11 +150,11 @@ const agentParameter = {
   wire: 'agentId',
   source: 'lookup',
   lookup: 'agent',
-  codec: {
-    mode: 'strict',
-    typeSymbol: '@deepseek-ai/dsh-session/types#SessionId',
-    schema: z.intersection(z.string(), z.unknown()),
-  },
+    codec: {
+      mode: 'strict',
+      typeSymbol: '@deepseek-ai/dsh-session/types#SessionId',
+      create: () => z.intersection(z.string(), z.unknown()),
+    },
 }
 
 /** The contribution the client assembly mounts to provide `remote.workspaceReview`. */
@@ -173,7 +173,7 @@ export const TYPERT_REMOTE = {
       result: {
         mode: 'strict',
         typeSymbol: 'dsh-review/host/types#ReviewReport',
-        schema: reviewReport,
+        create: () => reviewReport,
       },
     },
     {
@@ -192,21 +192,21 @@ export const TYPERT_REMOTE = {
           codec: {
             mode: 'strict',
             typeSymbol: 'dsh-review/host/types#ReviewPath',
-            schema: z.string(),
+            create: () => z.string(),
           },
         },
         {
           name: 'context',
           wire: 'context',
           source: 'json',
-          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewContext', schema: z.number() },
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewContext', create: () => z.number() },
         },
       ],
       cancellation: { parameter: 'signal' },
       result: {
         mode: 'strict',
         typeSymbol: 'dsh-review/host/types#ReviewDiff',
-        schema: reviewDiff,
+        create: () => reviewDiff,
       },
     },
     {
@@ -221,7 +221,7 @@ export const TYPERT_REMOTE = {
       result: {
         mode: 'strict',
         typeSymbol: 'dsh-review/host/types#ReviewCommits',
-        schema: reviewCommits,
+        create: () => reviewCommits,
       },
     },
     {
@@ -237,14 +237,14 @@ export const TYPERT_REMOTE = {
           name: 'oid',
           wire: 'oid',
           source: 'json',
-          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#CommitId', schema: z.string() },
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#CommitId', create: () => z.string() },
         },
       ],
       cancellation: { parameter: 'signal' },
       result: {
         mode: 'strict',
         typeSymbol: 'dsh-review/host/types#ReviewCommit',
-        schema: reviewCommit,
+        create: () => reviewCommit,
       },
     },
     {
@@ -260,26 +260,26 @@ export const TYPERT_REMOTE = {
           name: 'oid',
           wire: 'oid',
           source: 'json',
-          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#CommitId', schema: z.string() },
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#CommitId', create: () => z.string() },
         },
         {
           name: 'path',
           wire: 'path',
           source: 'json',
-          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewPath', schema: z.string() },
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewPath', create: () => z.string() },
         },
         {
           name: 'context',
           wire: 'context',
           source: 'json',
-          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewContext', schema: z.number() },
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewContext', create: () => z.number() },
         },
       ],
       cancellation: { parameter: 'signal' },
       result: {
         mode: 'strict',
         typeSymbol: 'dsh-review/host/types#ReviewDiff',
-        schema: reviewDiff,
+        create: () => reviewDiff,
       },
     },
     {
@@ -294,7 +294,7 @@ export const TYPERT_REMOTE = {
       result: {
         mode: 'strict',
         typeSymbol: 'dsh-review/host/types#ReviewFiles',
-        schema: reviewFiles,
+        create: () => reviewFiles,
       },
     },
     {
@@ -310,14 +310,14 @@ export const TYPERT_REMOTE = {
           name: 'path',
           wire: 'path',
           source: 'json',
-          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewPath', schema: z.string() },
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewPath', create: () => z.string() },
         },
       ],
       cancellation: { parameter: 'signal' },
       result: {
         mode: 'strict',
         typeSymbol: 'dsh-review/host/types#ReviewFileText',
-        schema: reviewFileText,
+        create: () => reviewFileText,
       },
     },
     {
@@ -333,20 +333,20 @@ export const TYPERT_REMOTE = {
           name: 'path',
           wire: 'path',
           source: 'json',
-          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewPath', schema: z.string() },
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewPath', create: () => z.string() },
         },
         {
           name: 'text',
           wire: 'text',
           source: 'json',
-          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewText', schema: z.string() },
+          codec: { mode: 'strict', typeSymbol: 'dsh-review/host/types#ReviewText', create: () => z.string() },
         },
       ],
       cancellation: { parameter: 'signal' },
       result: {
         mode: 'strict',
         typeSymbol: 'dsh-review/host/types#ReviewWriteResult',
-        schema: reviewWriteResult,
+        create: () => reviewWriteResult,
       },
     },
   ],

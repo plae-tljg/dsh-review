@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')
-const checkout = process.env.DSH_CHECKOUT ?? '/home/fit/00lib/deepseek-harness'
+const checkout = process.env.DSH_CHECKOUT ?? '/home/lkm/00app/03repo/deepseek-harness'
 
 /** The esbuild version the harness vendors; picked explicitly so a stray copy cannot decide the build. */
 const ESBUILD_VERSION = process.env.DSH_ESBUILD_VERSION ?? '0.28.1'

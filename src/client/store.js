@@ -387,9 +387,13 @@ export function createReviewStore() {
         if (tab === undefined) return
         tab.report = { kind: 'ready', report }
         const present = new Set(report.files.map(file => file.path))
-        // A refreshed diff body belongs to the old report, so it is dropped
-        // whether or not the path survived; the body refetches on demand.
-        tab.diffs = Object.fromEntries(Object.entries(tab.diffs).filter(([path]) => present.has(path)))
+        // Every cached body belongs to the report that produced it, so a new
+        // report drops all of them and the open path is read again on demand.
+        // Keeping a body whose path is still listed is what showed a stale
+        // patch: a file read while it was untracked stayed "all additions"
+        // after it was committed and edited again, while the tree beside it
+        // carried the new counts.
+        tab.diffs = {}
         const stale = tab.selected === null || !present.has(tab.selected)
         tab.selected = stale ? report.files[0]?.path ?? null : tab.selected
         // A path that left the report stops being hidden, so a file that comes
