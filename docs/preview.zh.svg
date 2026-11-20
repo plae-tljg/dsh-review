@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="300" viewBox="0 0 640 300" role="img" aria-label="The Review tab: a directory tree of changed files with per-file counts beside the unified diff of the selected file">
+  <defs>
+    <clipPath id="panel"><rect x="16" y="16" width="608" height="268" rx="10"/></clipPath>
+  </defs>
+
+  <rect x="16" y="16" width="608" height="268" rx="10" fill="#20242f"/>
+  <rect x="16.5" y="16.5" width="607" height="267" rx="9.5" fill="none" stroke="#39404f" stroke-width="1"/>
+
+  <g clip-path="url(#panel)">
+
+    <!-- header: the four source pills and the totals -->
+    <rect x="16" y="16" width="608" height="34" fill="#272c38"/>
+    <rect x="32" y="25" width="58" height="16" rx="8" fill="#333a49"/>
+    <rect x="96" y="25" width="70" height="16" rx="8" fill="#3d6ea8"/>
+    <rect x="172" y="25" width="62" height="16" rx="8" fill="#333a49"/>
+    <rect x="240" y="25" width="62" height="16" rx="8" fill="#333a49"/>
+    <rect x="536" y="25" width="30" height="16" rx="8" fill="#2f7d4f"/>
+    <rect x="572" y="25" width="30" height="16" rx="8" fill="#8a3d3d"/>
+
+    <!-- the divider between the tree and the diff -->
+    <rect x="286" y="50" width="1" height="234" fill="#39404f"/>
+
+    <!-- ── the tree ── -->
+    <!-- folder row -->
+    <path d="M40 62 h10 l3 3 h11 v13 h-24 z" fill="#7c8798"/>
+    <rect x="70" y="70" width="74" height="6" rx="3" fill="#9aa4b3"/>
+    <rect x="150" y="67" width="26" height="12" rx="6" fill="#2f7d4f"/>
+    <rect x="182" y="67" width="26" height="12" rx="6" fill="#8a3d3d"/>
+
+    <!-- nested folder row -->
+    <path d="M56 88 h8 l3 3 h9 v12 h-20 z" fill="#7c8798"/>
+    <rect x="82" y="95" width="56" height="6" rx="3" fill="#9aa4b3"/>
+
+    <!-- changed file rows -->
+    <g>
+      <rect x="76" y="116" width="8" height="8" rx="2" fill="#c99a4e"/>
+      <rect x="90" y="118" width="98" height="6" rx="3" fill="#c3cad6"/>
+      <rect x="196" y="115" width="28" height="12" rx="6" fill="#2f7d4f"/>
+      <rect x="230" y="115" width="26" height="12" rx="6" fill="#8a3d3d"/>
+    </g>
+    <g>
+      <rect x="76" y="140" width="8" height="8" rx="2" fill="#c99a4e"/>
+      <rect x="90" y="142" width="74" height="6" rx="3" fill="#c3cad6"/>
+      <rect x="172" y="139" width="28" height="12" rx="6" fill="#2f7d4f"/>
+    </g>
+    <g>
+      <rect x="76" y="164" width="8" height="8" rx="2" fill="#c99a4e"/>
+      <rect x="90" y="166" width="112" height="6" rx="3" fill="#c3cad6"/>
+      <rect x="210" y="163" width="26" height="12" rx="6" fill="#8a3d3d"/>
+    </g>
+    <g>
+      <rect x="76" y="188" width="8" height="8" rx="2" fill="#5aa9a0"/>
+      <rect x="90" y="190" width="66" height="6" rx="3" fill="#c3cad6"/>
+      <rect x="164" y="187" width="28" height="12" rx="6" fill="#2f7d4f"/>
+    </g>
+
+    <!-- a collapsed folder row, further down -->
+    <path d="M40 214 h10 l3 3 h11 v12 h-24 z" fill="#7c8798"/>
+    <rect x="70" y="221" width="60" height="6" rx="3" fill="#9aa4b3"/>
+
+    <!-- root-level file rows -->
+    <g>
+      <rect x="32" y="242" width="8" height="8" rx="2" fill="#c99a4e"/>
+      <rect x="46" y="244" width="86" height="6" rx="3" fill="#c3cad6"/>
+      <rect x="140" y="241" width="26" height="12" rx="6" fill="#2f7d4f"/>
+    </g>
+    <g>
+      <rect x="32" y="262" width="8" height="8" rx="2" fill="#5aa9a0"/>
+      <rect x="46" y="264" width="62" height="6" rx="3" fill="#c3cad6"/>
+      <rect x="116" y="261" width="26" height="12" rx="6" fill="#2f7d4f"/>
+    </g>
+
+    <!-- ── the diff ── -->
+    <!-- the selected file's header -->
+    <rect x="304" y="60" width="120" height="7" rx="3.5" fill="#c3cad6"/>
+    <rect x="432" y="58" width="46" height="11" rx="5.5" fill="#333a49"/>
+    <rect x="486" y="58" width="46" height="11" rx="5.5" fill="#333a49"/>
+
+    <!-- hunk header -->
+    <rect x="304" y="80" width="86" height="6" rx="3" fill="#6b7484"/>
+
+    <!-- context lines -->
+    <g fill="#2f3542">
+      <rect x="304" y="96" width="286" height="8" rx="2"/>
+      <rect x="304" y="110" width="238" height="8" rx="2"/>
+    </g>
+
+    <!-- removed lines: a red left edge and a red-tinted body -->
+    <g>
+      <rect x="304" y="126" width="3" height="16" rx="1.5" fill="#d05a5a"/>
+      <rect x="309" y="126" width="272" height="16" rx="2" fill="#4a2b2f"/>
+      <rect x="318" y="131" width="196" height="6" rx="3" fill="#c98d8d"/>
+    </g>
+    <g>
+      <rect x="304" y="148" width="3" height="16" rx="1.5" fill="#d05a5a"/>
+      <rect x="309" y="148" width="248" height="16" rx="2" fill="#4a2b2f"/>
+      <rect x="318" y="153" width="164" height="6" rx="3" fill="#c98d8d"/>
+    </g>
+
+    <!-- added lines: a green left edge and a green-tinted body -->
+    <g>
+      <rect x="304" y="170" width="3" height="16" rx="1.5" fill="#4ba86f"/>
+      <rect x="309" y="170" width="282" height="16" rx="2" fill="#24402f"/>
+      <rect x="318" y="175" width="206" height="6" rx="3" fill="#8fc9a6"/>
+    </g>
+    <g>
+      <rect x="304" y="192" width="3" height="16" rx="1.5" fill="#4ba86f"/>
+      <rect x="309" y="192" width="196" height="16" rx="2" fill="#24402f"/>
+      <rect x="318" y="197" width="140" height="6" rx="3" fill="#8fc9a6"/>
+    </g>
+
+    <!-- context lines again -->
+    <g fill="#2f3542">
+      <rect x="304" y="216" width="262" height="8" rx="2"/>
+      <rect x="304" y="230" width="214" height="8" rx="2"/>
+      <rect x="304" y="244" width="246" height="8" rx="2"/>
+    </g>
+
+    <!-- the folded gap -->
+    <rect x="304" y="258" width="286" height="1" fill="#39404f"/>
+  </g>
+</svg>

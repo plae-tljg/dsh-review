@@ -9,7 +9,8 @@
  */
 
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { createRequire } from 'node:module'
@@ -33,14 +34,27 @@ const profileRequire = createRequire(`${process.env.HOME}/.dsh/profiles/web/pack
  * @param {string} specifier - An npm specifier.
  * @returns {any} The loaded module.
  */
-const checkout = process.env.DSH_CHECKOUT ?? '/home/lkm/00app/03repo/deepseek-harness'
+const CHECKOUT_CANDIDATES = [
+  process.env.DSH_CHECKOUT,
+  join(homedir(), '00lib', 'dsh-mother'),
+  join(homedir(), '00lib', 'deepseek-harness'),
+  '/home/lkm/00app/03repo/deepseek-harness',
+].filter(candidate => candidate !== undefined)
+const checkout = CHECKOUT_CANDIDATES.find(candidate => existsSync(join(candidate, 'node_modules', '.pnpm')))
+if (checkout === undefined) {
+  throw new Error(
+    `test: no harness checkout found. Looked in:\n  ${CHECKOUT_CANDIDATES.join('\n  ')}\n`
+    + 'Set DSH_CHECKOUT to the checkout to test against.',
+  )
+}
 const harnessRequire = createRequire(join(checkout, 'package.json'))
 const pnpmPackage = (name) => {
   const entry = readdirSync(join(checkout, 'node_modules', '.pnpm'))
     .find(item => item === name || item.startsWith(`${name}@`))
   if (entry === undefined) throw new Error(`build: ${name} is not installed in ${checkout}`)
   return join(checkout, 'node_modules', '.pnpm', entry, 'node_modules', name)
-}// The harness does not hoist React to its root, so read it from the pnpm store.
+}
+// The harness does not hoist React to its root, so read it from the pnpm store.
 const reactPath = join(pnpmPackage('react'), 'index.js')
 const reactDomServerPath = join(pnpmPackage('react-dom'), 'server.js')
 

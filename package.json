@@ -1,7 +1,7 @@
 {
   "name": "dsh-review",
-  "version": "0.1.0",
-  "description": "DeepSeek Harness plugin: an opencode-style Review panel for the web GUI's right sidebar \u2014 uncommitted changes and per-conversation-round changes, each as a directory tree with +added/-removed counts, grand totals, and the selected file's unified diff in red/green",
+  "version": "0.2.0",
+  "description": "DeepSeek Harness plugin: an opencode-style Review panel for the web GUI's right sidebar — uncommitted changes and per-conversation-round changes, each as a directory tree with +added/-removed counts, grand totals, and the selected file's unified diff in red/green",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -39,7 +39,9 @@
     },
     "./src/*": "./src/*",
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
   },
   "dsh": {
     "bundle": {
@@ -66,7 +68,9 @@
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
-    "docs"
+    "docs",
+    "locale/*.json",
+    "icon.svg"
   ],
   "scripts": {
     "build": "node build/build.mjs",
@@ -74,7 +78,8 @@
     "check": "npm run test"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22",
+    "dsh": ">=0.2.2-rc.3 <0.3.0"
   },
   "dependencies": {
     "zod": "^4.4.3"

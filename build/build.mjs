@@ -20,13 +20,37 @@
  */
 
 import { createRequire } from 'node:module'
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')
-const checkout = process.env.DSH_CHECKOUT ?? '/home/lkm/00app/03repo/deepseek-harness'
+
+/**
+ * The harness checkout to build against.
+ *
+ * The build resolves esbuild and zod out of a harness checkout, because a
+ * plugin outside the monorepo cannot install them itself. The checkout is
+ * found in this order: an explicit `DSH_CHECKOUT`, then the mother checkout
+ * and the plain checkout under `~/00lib`, then the path the original author
+ * used. The first one that exists wins.
+ */
+const CHECKOUT_CANDIDATES = [
+  process.env.DSH_CHECKOUT,
+  join(homedir(), '00lib', 'dsh-mother'),
+  join(homedir(), '00lib', 'deepseek-harness'),
+  '/home/lkm/00app/03repo/deepseek-harness',
+].filter(candidate => candidate !== undefined)
+
+const checkout = CHECKOUT_CANDIDATES.find(candidate => existsSync(join(candidate, 'node_modules', '.pnpm')))
+if (checkout === undefined) {
+  throw new Error(
+    `build: no harness checkout found. Looked in:\n  ${CHECKOUT_CANDIDATES.join('\n  ')}\n`
+    + 'Set DSH_CHECKOUT to the checkout to build against.',
+  )
+}
 
 /**
  * Find one package in the checkout's pnpm store.

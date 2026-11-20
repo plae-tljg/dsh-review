@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Review panel",
+    "description": "Adds a Review tab to the Web GUI's right sidebar. It shows the session workspace four ways — Uncommitted (the working tree against HEAD, as a directory tree with per-file +added/-removed counts and the selected file's unified diff), Rounds (what the agent changed in each conversation round, derived from the live conversation), Commits (the recent history, with a commit expanding to the files it touched), and Files (a plain workspace browser, including git-ignored files such as .env, with an optional editor). Open it from the right panel's + menu. The Uncommitted, Commits and Files views read the workspace only; the optional editor is the one control that writes, and it is off until you turn it on.",
+    "detail": "docs/DETAIL.md"
+  }
+}

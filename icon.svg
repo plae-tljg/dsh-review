@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Review panel">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b3345"/>
+      <stop offset="1" stop-color="#1b2030"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="url(#bg)"/>
+  <rect x="4.75" y="4.75" width="118.5" height="118.5" rx="25.25" fill="none" stroke="#454f66" stroke-width="1.5"/>
+
+  <!-- the tree column -->
+  <path d="M26 40 h11 l3.5 3.5H52 v9H26 z" fill="#8b96a9"/>
+  <rect x="26" y="59" width="6.5" height="6.5" rx="1.8" fill="#d0a45c"/>
+  <rect x="37" y="60.5" width="24" height="4" rx="2" fill="#c3cad6"/>
+  <rect x="26" y="72" width="6.5" height="6.5" rx="1.8" fill="#d0a45c"/>
+  <rect x="37" y="73.5" width="17" height="4" rx="2" fill="#c3cad6"/>
+  <rect x="26" y="85" width="6.5" height="6.5" rx="1.8" fill="#63b6ac"/>
+  <rect x="37" y="86.5" width="21" height="4" rx="2" fill="#c3cad6"/>
+
+  <!-- the count chips -->
+  <rect x="63" y="58.5" width="12" height="7.5" rx="3.75" fill="#4ba86f"/>
+  <rect x="63" y="71.5" width="12" height="7.5" rx="3.75" fill="#4ba86f"/>
+  <rect x="63" y="84.5" width="12" height="7.5" rx="3.75" fill="#d05a5a"/>
+
+  <!-- the diff column -->
+  <rect x="82" y="34" width="4" height="72" rx="2" fill="#39415a"/>
+  <rect x="88" y="40" width="12" height="5" rx="2.5" fill="#7d8798"/>
+  <rect x="88" y="52" width="22" height="5" rx="2.5" fill="#5c6577"/>
+  <rect x="82" y="62" width="3" height="10" rx="1.5" fill="#d05a5a"/>
+  <rect x="87" y="62" width="23" height="10" rx="2" fill="#5a3038"/>
+  <rect x="82" y="76" width="3" height="10" rx="1.5" fill="#4ba86f"/>
+  <rect x="87" y="76" width="23" height="10" rx="2" fill="#26472f"/>
+  <rect x="88" y="90" width="18" height="5" rx="2.5" fill="#5c6577"/>
+</svg>
