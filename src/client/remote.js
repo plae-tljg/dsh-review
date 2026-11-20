@@ -98,6 +98,7 @@ const reviewCommits = z.object({
   isRepository: z.boolean(),
   root: z.string().nullable(),
   commits: z.array(commitMeta),
+  truncated: z.boolean(),
 })
 
 const reviewCommit = z.object({

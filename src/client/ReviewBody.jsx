@@ -22,7 +22,7 @@ import { FileTypeIcon } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import css from './ReviewBody.module.css'
 import { sessionFileAddress } from './file-address.js'
-import { deriveRounds, lineDiff } from './rounds.js'
+import { deriveRounds, lineDiff, roundsSignature } from './rounds.js'
 import { loadView, saveView } from './view-state.js'
 
 /** The single letter a status shows, matching Git's own porcelain vocabulary. */
@@ -695,7 +695,12 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
   }, [conversation])
   const getSnapshot = useCallback(() => conversation?.getSnapshot?.() ?? null, [conversation])
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-  const rounds = useMemo(() => deriveRounds(snapshot), [snapshot])
+  // The snapshot changes on every streamed token, but the rounds it yields
+  // only change when a tool call settles or a turn ends. Deriving them on the
+  // signature instead of on the snapshot keeps a long reply from re-parsing
+  // the whole conversation's tool calls on every token.
+  const roundsKey = roundsSignature(snapshot)
+  const rounds = useMemo(() => deriveRounds(snapshot), [roundsKey])
   const roundTotals = useMemo(
     () => rounds.reduce((acc, round) => ({ added: acc.added + round.added, removed: acc.removed + round.removed }), { added: 0, removed: 0 }),
     [rounds],
@@ -958,19 +963,18 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
         {switchButton('commits', t('source.commits'))}
       </span>
       <span className={css.totals} data-review-totals={source}>
-        {source === 'git'
-          ? summary !== undefined && (
-            <>
-              {summary.added > 0 && <span className={css.added}>+{summary.added}</span>}
-              {summary.removed > 0 && <span className={css.removed}>-{summary.removed}</span>}
-            </>
-          )
-          : (
-            <>
-              {roundTotals.added > 0 && <span className={css.added}>+{roundTotals.added}</span>}
-              {roundTotals.removed > 0 && <span className={css.removed}>-{roundTotals.removed}</span>}
-            </>
-          )}
+        {source === 'git' && summary !== undefined && (
+          <>
+            {summary.added > 0 && <span className={css.added}>+{summary.added}</span>}
+            {summary.removed > 0 && <span className={css.removed}>-{summary.removed}</span>}
+          </>
+        )}
+        {source === 'rounds' && (
+          <>
+            {roundTotals.added > 0 && <span className={css.added}>+{roundTotals.added}</span>}
+            {roundTotals.removed > 0 && <span className={css.removed}>-{roundTotals.removed}</span>}
+          </>
+        )}
       </span>
       {source === 'git' && summary !== undefined && (
         <span className={css.branch} title={summary.root ?? undefined}>
@@ -1254,6 +1258,11 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
     return (
       <div className={css.root} data-review-state="commits">
         {header}
+        {commitsState.report.truncated && (
+          <p className={css.hint} data-review-commit-truncated="true">
+            {t('commit.truncated', { count: String(commitList.length) })}
+          </p>
+        )}
         <div className={css.split} style={splitStyle}>
           <div className={css.list}>
             <FilterBox value={filter} onChange={setFilter} t={t} />

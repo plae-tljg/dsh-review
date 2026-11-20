@@ -49,11 +49,94 @@ const MAX_BUFFER = 32 * 1024 * 1024
 const HEAVY_DIRS = new Set([
   'node_modules', '__pycache__', '.venv', 'venv', '.tox',
   '.mypy_cache', '.pytest_cache', '.ruff_cache',
+  // Build output and caches: as large as `node_modules` and just as
+  // uninteresting in a file browser.
+  'dist', 'build', 'out', 'target', 'coverage', '.next', '.nuxt',
+  '.turbo', '.cache', '.parcel-cache', '.gradle', '.svelte-kit',
+  '.pytest_cache', '.mypy_cache', '.ruff_cache', 'vendor',
 ])
 
 /** Whether a repository-relative path sits under a heavy directory. */
 function isHeavyPath(path) {
   return path.split('/').some(segment => HEAVY_DIRS.has(segment))
+}
+
+/**
+ * The pathspec excludes that keep the heavy directories out of a listing.
+ *
+ * They are Git pathspec magic, so the command carrying them must not run
+ * under `--literal-pathspecs`: that flag stops Git reading `:` as pathspec
+ * magic at all, and the prefix would be matched as a literal name. Every path
+ * here is a literal this file owns, so nothing a caller supplies is ever
+ * interpreted.
+ */
+const HEAVY_EXCLUDES = [...HEAVY_DIRS].flatMap(dir => [
+  `:(exclude)${dir}`,
+  `:(exclude)${dir}/**`,
+  `:(exclude)**/${dir}/**`,
+])
+
+/** How many leading bytes Git reads when deciding a file is binary. */
+const BINARY_SNIFF_BYTES = 8000
+
+/**
+ * The line counts Git would report for one untracked file.
+ *
+ * `git diff` omits untracked paths, so their counts come from the file itself.
+ * Git's rule is the number of lines the file holds: every newline starts a
+ * line, and a final line without a newline of its own still counts. A file
+ * holding a NUL byte in its first 8000 bytes is binary, and Git reports no
+ * counts for it.
+ *
+ * Reading the file is one sequential read. Asking Git for the same number is
+ * one *process* per file, and a tree with thousands of untracked files would
+ * then fork thousands of git processes at once, which is what made the report
+ * time out on a large project.
+ * @param {string} absolute - Absolute path of the file.
+ * @param {AbortSignal} [signal] - Caller cancellation.
+ * @returns {Promise<{ added: number|null, removed: number|null }|null>} The counts, or `null` when the file could not be read.
+ */
+async function countFileLines(absolute, signal) {
+  let handle
+  try {
+    handle = await fsp.open(absolute, 'r')
+  } catch {
+    return null
+  }
+  try {
+    const stats = await handle.stat()
+    if (!stats.isFile()) return null
+    const chunk = Buffer.allocUnsafe(64 * 1024)
+    let lines = 0
+    let last = -1
+    let sawBytes = false
+    let head = Buffer.alloc(0)
+    for (;;) {
+      if (signal?.aborted === true) return null
+      const { bytesRead } = await handle.read(chunk, 0, chunk.length, null)
+      if (bytesRead === 0) break
+      const slice = chunk.subarray(0, bytesRead)
+      sawBytes = true
+      if (head.length < BINARY_SNIFF_BYTES) {
+        head = Buffer.concat([head, slice.subarray(0, BINARY_SNIFF_BYTES - head.length)])
+      }
+      let at = slice.indexOf(0x0a)
+      while (at !== -1) {
+        lines += 1
+        at = slice.indexOf(0x0a, at + 1)
+      }
+      last = slice[bytesRead - 1]
+    }
+    if (head.includes(0x00)) return { added: null, removed: null }
+    // A last line with no newline of its own is still a line: a file holding
+    // `a` is one line, and a file holding `a\nb` is two.
+    const trailing = sawBytes && last !== 0x0a ? 1 : 0
+    return { added: lines + trailing, removed: 0 }
+  } catch {
+    return null
+  } finally {
+    await handle.close().catch(() => undefined)
+  }
 }
 
 /** Directories that are never walked: VCS metadata and the heavy generated set. */
@@ -422,6 +505,10 @@ export class WorkspaceReview extends TypertRemoteService {
     }
     const patch = result.stdout.slice(0, this.config.maxDiffBytes)
     const parsed = parseUnifiedDiff(patch)[0]
+    // `git diff --no-index` writes the absolute path it was handed, so the
+    // section of an untracked file names a path outside the repository. The
+    // row's own path is the one the reader knows, so it is restored here.
+    if (untracked && parsed !== undefined) parsed.path = path
     return {
       isRepository: true,
       untracked,
@@ -452,10 +539,12 @@ export class WorkspaceReview extends TypertRemoteService {
   async commits(agent, signal) {
     const root = this.rootOf(agent)
     if (!(await this.isRepository(root, signal))) {
-      return { isRepository: false, root: null, commits: [] }
+      return { isRepository: false, root: null, commits: [], truncated: false }
     }
+    // One commit past the cap, so a list that was cut is distinguishable from
+    // one that happens to end exactly at the cap.
     const stdout = await this.gitRun(root, [
-      'log', `-n${this.config.maxCommits}`, '--no-color', '--no-merges',
+      'log', `-n${this.config.maxCommits + 1}`, '--no-color', '--no-merges',
       '--pretty=format:%H%x00%h%x00%at%x00%an%x00%s%x00',
     ], signal, 'git log')
     const commits = []
@@ -471,7 +560,9 @@ export class WorkspaceReview extends TypertRemoteService {
         subject: subject ?? '',
       })
     }
-    return { isRepository: true, root, commits }
+    const truncated = commits.length > this.config.maxCommits
+    if (truncated) commits.length = this.config.maxCommits
+    return { isRepository: true, root, commits, truncated }
   }
 
   /**
@@ -583,20 +674,32 @@ export class WorkspaceReview extends TypertRemoteService {
     if (isRepository) {
       // Tracked + untracked, then git-ignored files too: a plain file browser
       // should show `.env` (normally ignored), while the heavy generated
-      // directories stay out so the tree is still navigable.
+      // directories stay out so the tree is still navigable. The heavy
+      // directories are excluded in Git's own pathspec, so a repository whose
+      // `node_modules` holds a hundred thousand files never hands them to
+      // this process at all.
       try {
         const [tracked, ignored] = await Promise.all([
-          this.gitRun(root, ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], signal, 'git ls-files'),
-          this.gitRun(root, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z'], signal, 'git ls-files --ignored'),
+          this.gitRunListing(root, ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', ...HEAVY_EXCLUDES], signal, 'git ls-files'),
+          this.gitRunListing(root, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', ...HEAVY_EXCLUDES], signal, 'git ls-files --ignored'),
         ])
+        const cap = this.config.maxStatusEntries
         const unique = new Set()
+        let overflow = false
         for (const output of [tracked, ignored]) {
+          if (overflow) break
           for (const path of output.split('\0')) {
-            if (path !== '' && !isHeavyPath(path)) unique.add(path)
+            if (path === '' || isHeavyPath(path)) continue
+            unique.add(path)
+            // The cap bounds what is kept, so the set never grows past it.
+            if (unique.size > cap) {
+              overflow = true
+              break
+            }
           }
         }
         const paths = [...unique].sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
-        listed = { paths, truncated: paths.length > this.config.maxStatusEntries }
+        listed = { paths: paths.slice(0, cap), truncated: overflow }
       } catch {
         // A repository Git itself cannot list — a broken object store, a bare
         // directory holding only part of a checkout — still has files on disk.
@@ -771,6 +874,41 @@ export class WorkspaceReview extends TypertRemoteService {
   }
 
   /**
+   * One `git -C <root> <args…>` command line that keeps pathspec magic.
+   *
+   * `--literal-pathspecs` stops Git reading `:` as pathspec magic at all, so
+   * the exclusion pathspecs need a command without it. Every path such a
+   * command carries is a literal this file owns, so nothing a caller supplies
+   * is ever interpreted.
+   * @param {string} root - Absolute workspace root.
+   * @param {readonly string[]} args - Arguments.
+   * @returns {string} The command line.
+   */
+  gitListing(root, args) {
+    return ['git', '-C', quote(root), ...args].join(' ')
+  }
+
+  /**
+   * Run one git command that keeps pathspec magic and must succeed.
+   * @param {string} root - Absolute workspace root.
+   * @param {readonly string[]} args - Arguments.
+   * @param {AbortSignal} signal - Caller cancellation.
+   * @param {string} what - Human-readable command name for the failure message.
+   * @returns {Promise<string>} Stdout.
+   */
+  async gitRunListing(root, args, signal, what) {
+    const result = await run(this.gitListing(root, args), signal)
+    if (result.code !== 0) {
+      throw new RemoteError(
+        'workspace-review/command-failed',
+        `${what} failed: ${result.stderr.trim() || `exit ${String(result.code)}`}`,
+        { command: what, output: result.stderr },
+      )
+    }
+    return result.stdout
+  }
+
+  /**
    * Run one git command that must succeed.
    * @param {string} root - Absolute workspace root.
    * @param {readonly string[]} args - Already-quoted arguments.
@@ -882,28 +1020,15 @@ export class WorkspaceReview extends TypertRemoteService {
   /**
    * Added and removed counts for one untracked path.
    *
-   * `git diff` omits untracked paths, so the count comes from `--no-index`
-   * against the null device — the same read the diff body uses, so Git itself
-   * decides the binary case. A path Git reports as binary yields two `null`s.
+   * `git diff` omits untracked paths, so the count is the file's own line
+   * count, read from the file rather than forked out to Git per path.
    * @param {string} root - Absolute workspace root.
    * @param {string} path - Repository-relative path.
    * @param {AbortSignal} signal - Caller cancellation.
    * @returns {Promise<{ added: number|null, removed: number|null }|null>} The counts, or `null` when the read failed.
    */
   async untrackedCount(root, path, signal) {
-    const absolute = `${root.replace(/[/\\]+$/, '')}/${path}`
-    const result = await run(this.git(root, [
-      'diff', '--no-index', '--numstat', '--no-color', '--', '/dev/null', quote(absolute),
-    ]), signal)
-    // `--no-index` reports a diff through exit 1, which is not a failure here.
-    if (result.code !== 0 && result.code !== 1) return null
-    const record = result.stdout.split('\n')[0] ?? ''
-    const [added, removed] = record.split('\t')
-    if (added === undefined || removed === undefined) return null
-    return {
-      added: added === '-' ? null : Number(added),
-      removed: removed === '-' ? null : Number(removed),
-    }
+    return countFileLines(join(root, path), signal)
   }
 }
 

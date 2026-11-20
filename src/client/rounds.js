@@ -413,6 +413,35 @@ function statusOfFile(file) {
 }
 
 /**
+ * A cheap fingerprint of everything {@link deriveRounds} reads.
+ *
+ * The conversation snapshot changes on every streamed token, but the rounds it
+ * yields only change when a tool call settles or a turn ends. This signature
+ * names exactly those things — the settled tool-result nodes and the turn
+ * boundaries — so the caller can derive the rounds when the signature moves
+ * instead of on every token of a reply.
+ *
+ * It is a fingerprint, not a hash: two different conversations may share one,
+ * and the caller treats a match as "nothing that matters changed".
+ * @param {unknown} snapshot - A ConversationSnapshot, or null.
+ * @returns {string} The signature.
+ */
+export function roundsSignature(snapshot) {
+  const view = normalizeSnapshot(snapshot)
+  if (view === undefined) return ''
+  const parts = []
+  for (const node of view.nodes) {
+    if (node.kind !== 'tool-result') continue
+    // A settled block carries its result metadata; an unsettled one does not,
+    // and the two differ in what they contribute.
+    const settled = node.isError !== undefined ? (node.isError ? 'e' : 'o') : 'p'
+    const calls = Array.isArray(node.subCalls) ? node.subCalls.length : 0
+    parts.push(`${node.seq}:${settled}:${calls}`)
+  }
+  return `${parts.join(',')}|${view.turnEnds.size}`
+}
+
+/**
  * One session's rounds, newest first, each with its changed files as report rows.
  *
  * @param {unknown} snapshot - A ConversationSnapshot, or null.

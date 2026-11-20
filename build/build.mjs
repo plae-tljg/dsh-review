@@ -20,13 +20,38 @@
  */
 
 import { createRequire } from 'node:module'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')
 const checkout = process.env.DSH_CHECKOUT ?? '/home/lkm/00app/03repo/deepseek-harness'
+
+/**
+ * Find one package in the checkout's pnpm store.
+ *
+ * The harness does not hoist its dependencies to its root, so a version has to
+ * be read out of the store directory. The version is *not* pinned: the harness
+ * moves its own dependencies between releases (zod 4.4.3 under 0.2.1-rc.2,
+ * zod 4.6.6 under 0.2.2-rc.4), and a pinned version makes this build fail
+ * against every checkout but one.
+ * @param {string} name - The package name.
+ * @param {string} [version] - An exact version to prefer, when the caller knows it.
+ * @returns {string} The path of the package's entry directory.
+ */
+function pnpmPackage(name, version) {
+  const store = join(checkout, 'node_modules', '.pnpm')
+  const entries = readdirSync(store)
+  const exact = version === undefined
+    ? undefined
+    : entries.find(item => item === `${name}@${version}`)
+  const entry = exact ?? entries.find(item => item === name || item.startsWith(`${name}@`))
+  if (entry === undefined) {
+    throw new Error(`build: ${name} is not installed in ${checkout}`)
+  }
+  return join(store, entry, 'node_modules', name)
+}
 
 /** The esbuild version the harness vendors; picked explicitly so a stray copy cannot decide the build. */
 const ESBUILD_VERSION = process.env.DSH_ESBUILD_VERSION ?? '0.28.1'
@@ -41,8 +66,7 @@ const esbuild = await import(esbuildEntry).then(mod => mod.default ?? mod)
  * does not own. It resolves from the same checkout as esbuild: a plugin outside
  * the repository installs into a profile that has no reason to carry it.
  */
-const ZOD_VERSION = process.env.DSH_ZOD_VERSION ?? '4.4.3'
-const zodPath = join(checkout, 'node_modules', '.pnpm', `zod@${ZOD_VERSION}`, 'node_modules', 'zod')
+const zodPath = pnpmPackage('zod', process.env.DSH_ZOD_VERSION)
 
 /** Package name, which is also the client bundle's module-table id. */
 const PACKAGE = 'dsh-review'
