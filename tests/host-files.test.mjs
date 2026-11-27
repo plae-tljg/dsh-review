@@ -57,10 +57,54 @@ test('listFiles returns tracked, untracked and ignored files, minus heavy dirs',
     // `.env` and `ignored.txt` are git-ignored but still listed; node_modules is not.
     assert.deepEqual(paths, ['.env', '.gitignore', 'ignored.txt', 'tracked.txt', 'untracked.txt'])
     assert.equal(report.count, 5)
+    assert.equal(report.total, 5)
+    assert.equal(report.truncated, false)
     assert.ok(!paths.some(path => path.includes('node_modules')))
     // The tree groups them; a root-level file sits in `files`.
     assert.ok(report.tree.files.some(file => file.path === 'tracked.txt'))
   })
+})
+
+test('listFiles keeps every top-level directory when the cap cuts the list', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-review-cap-'))
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 'T', GIT_AUTHOR_EMAIL: 't@example.com',
+    GIT_COMMITTER_NAME: 'T', GIT_COMMITTER_EMAIL: 't@example.com',
+  }
+  const git = (...args) => execFileSync('git', args, { cwd: root, env })
+  try {
+    git('init', '-q')
+    // One directory holds far more files than the others, so an alphabetical
+    // slice would hand the whole budget to it and leave the rest empty.
+    mkdirSync(join(root, 'big'), { recursive: true })
+    for (let index = 0; index < 40; index += 1) {
+      writeFileSync(join(root, 'big', `file-${String(index).padStart(3, '0')}.txt`), 'x\n')
+    }
+    mkdirSync(join(root, 'small'), { recursive: true })
+    writeFileSync(join(root, 'small', 'note.txt'), 'x\n')
+    writeFileSync(join(root, 'root.txt'), 'x\n')
+    git('add', '.')
+    git('commit', '-q', '-m', 'init')
+
+    const service = serviceAt(root)
+    service.config = { ...DEFAULT_CONFIG, maxStatusEntries: 10 }
+    const report = await service.listFiles({ session: {} }, new AbortController().signal)
+
+    assert.equal(report.truncated, true)
+    assert.equal(report.count, 10)
+    // The true size of the workspace is reported, not the size of the cut.
+    assert.equal(report.total, 42)
+    // Every top-level directory survives the cut.
+    const directories = report.tree.directories.map(node => node.name).sort()
+    assert.deepEqual(directories, ['big', 'small'])
+    assert.ok(report.tree.files.some(file => file.path === 'root.txt'))
+    // The listing is deterministic: the same workspace yields the same cut.
+    const again = await service.listFiles({ session: {} }, new AbortController().signal)
+    assert.deepEqual(again.files.map(file => file.path), report.files.map(file => file.path))
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('readFile returns the file text and writeFile updates it', async () => {

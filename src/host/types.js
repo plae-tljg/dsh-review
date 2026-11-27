@@ -35,6 +35,8 @@
  * @property {{ directories: ReviewTreeNode[], files: ReviewFile[] }} tree The same files grouped into directories, each folder carrying the totals for what it holds, plus the files that sit at the repository root.
  * @property {number} added Total lines added across `files`.
  * @property {number} removed Total lines removed across `files`.
+ * @property {number} count How many files the report carries.
+ * @property {number} total How many files the workspace really holds; larger than `count` when the listing was cut.
  * @property {boolean} truncated The file list hit the entry cap.
  */
 

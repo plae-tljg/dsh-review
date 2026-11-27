@@ -69,6 +69,13 @@ function isHeavyPath(path) {
  * magic at all, and the prefix would be matched as a literal name. Every path
  * here is a literal this file owns, so nothing a caller supplies is ever
  * interpreted.
+ *
+ * The magic starts with `(`, which the shell reads as a subshell — so every
+ * pathspec has to reach Git quoted. Unquoted, the whole listing fails with a
+ * shell syntax error, the failure is swallowed, and the view falls back to
+ * walking the directory: a different list, cut at a different place, with the
+ * directories that happened to be read first. Each pathspec is therefore
+ * quoted where the command is built.
  */
 const HEAVY_EXCLUDES = [...HEAVY_DIRS].flatMap(dir => [
   `:(exclude)${dir}`,
@@ -168,16 +175,61 @@ function isSkippedDirectory(name) {
  * @param {number} cap - Largest number of paths to return.
  * @returns {Promise<{ paths: string[], truncated: boolean }>} Relative paths and whether a bound was hit.
  */
+/**
+ * Choose at most `cap` paths out of a sorted list, giving every top-level
+ * directory a share of the budget.
+ *
+ * A plain alphabetical slice hands the whole budget to whichever directory
+ * sorts first — a workspace holding one generated directory with ninety
+ * thousand files then shows that directory and nothing else, and the other
+ * folders appear empty or missing. Taking one path per directory per round
+ * keeps every folder in the tree, spreads the cut evenly, and stays
+ * deterministic: the same workspace always yields the same tree.
+ *
+ * @param {string[]} paths Repository-relative paths, sorted.
+ * @param {number} cap Largest number of paths to keep.
+ * @returns {string[]} The kept paths, sorted.
+ */
+export function selectFairly(paths, cap) {
+  if (paths.length <= cap) return paths
+  /** @type {Map<string, string[]>} */
+  const groups = new Map()
+  for (const path of paths) {
+    const slash = path.indexOf('/')
+    const key = slash === -1 ? '' : path.slice(0, slash)
+    const group = groups.get(key)
+    if (group === undefined) groups.set(key, [path])
+    else group.push(path)
+  }
+  const keys = [...groups.keys()].sort()
+  const selected = []
+  for (let round = 0; selected.length < cap; round += 1) {
+    let progressed = false
+    for (const key of keys) {
+      const group = groups.get(key)
+      if (group === undefined || round >= group.length) continue
+      selected.push(group[round])
+      progressed = true
+      if (selected.length >= cap) break
+    }
+    if (!progressed) break
+  }
+  return selected.sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
+}
+
 export async function walkWorkspace(root, cap) {
   const paths = []
   /** Directories still to visit; the stack holds relative paths, `''` is the root. */
   const pending = ['']
   // One directory may hold no files at all, so the entry cap alone cannot stop a
-  // deep tree; the budget is the second bound.
-  let budget = cap
+  // deep tree; the budget is the second bound. The walk reads more than the
+  // report keeps, so the cut can be spread over the directories instead of
+  // landing on whichever one happened to be read first.
+  const ceiling = Math.max(cap * 10, 50000)
+  let budget = ceiling
   let truncated = false
   while (pending.length > 0) {
-    if (paths.length >= cap || budget <= 0) {
+    if (paths.length >= ceiling || budget <= 0) {
       truncated = true
       break
     }
@@ -203,7 +255,7 @@ export async function walkWorkspace(root, cap) {
         const target = await fsp.stat(join(root, path)).catch(() => null)
         if (target === null || target.isDirectory()) continue
       }
-      if (paths.length >= cap) {
+      if (paths.length >= ceiling) {
         truncated = true
         break
       }
@@ -212,7 +264,8 @@ export async function walkWorkspace(root, cap) {
     for (const directory of directories) pending.push(directory)
   }
   paths.sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
-  return { paths, truncated }
+  const kept = selectFairly(paths, cap)
+  return { paths: kept, total: paths.length, truncated: truncated || paths.length > kept.length }
 }
 
 /**
@@ -669,7 +722,7 @@ export class WorkspaceReview extends TypertRemoteService {
   async listFiles(agent, signal) {
     const root = this.rootOf(agent)
     const isRepository = await this.isRepository(root, signal)
-    /** @type {{ paths: string[], truncated: boolean }|null} */
+    /** @type {{ paths: string[], total: number, truncated: boolean }|null} */
     let listed = null
     if (isRepository) {
       // Tracked + untracked, then git-ignored files too: a plain file browser
@@ -680,34 +733,42 @@ export class WorkspaceReview extends TypertRemoteService {
       // this process at all.
       try {
         const [tracked, ignored] = await Promise.all([
-          this.gitRunListing(root, ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', ...HEAVY_EXCLUDES], signal, 'git ls-files'),
-          this.gitRunListing(root, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', ...HEAVY_EXCLUDES], signal, 'git ls-files --ignored'),
+          this.gitRunListing(root, ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', ...HEAVY_EXCLUDES.map(quote)], signal, 'git ls-files'),
+          this.gitRunListing(root, ['ls-files', '--others', '--ignored', '--exclude-standard', '-z', '--', ...HEAVY_EXCLUDES.map(quote)], signal, 'git ls-files --ignored'),
         ])
         const cap = this.config.maxStatusEntries
+        // Every path is counted and kept before the cut, so the report can state
+        // how large the workspace really is. The ceiling only protects memory
+        // on a pathological tree; it is far above any browsable workspace.
+        const ceiling = Math.max(cap * 40, 200000)
         const unique = new Set()
-        let overflow = false
+        let overflowed = false
         for (const output of [tracked, ignored]) {
-          if (overflow) break
           for (const path of output.split('\0')) {
             if (path === '' || isHeavyPath(path)) continue
-            unique.add(path)
-            // The cap bounds what is kept, so the set never grows past it.
-            if (unique.size > cap) {
-              overflow = true
+            if (unique.size >= ceiling) {
+              overflowed = true
               break
             }
+            unique.add(path)
           }
+          if (overflowed) break
         }
-        const paths = [...unique].sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
-        listed = { paths: paths.slice(0, cap), truncated: overflow }
+        const all = [...unique].sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
+        const total = all.length
+        const paths = selectFairly(all, cap)
+        listed = { paths, total, truncated: total > paths.length }
       } catch {
         // A repository Git itself cannot list — a broken object store, a bare
         // directory holding only part of a checkout — still has files on disk.
         listed = null
       }
     }
-    if (listed === null) listed = await walkWorkspace(root, this.config.maxStatusEntries)
-    const files = (listed.truncated ? listed.paths.slice(0, this.config.maxStatusEntries) : listed.paths).map(path => ({
+    if (listed === null) {
+      const walked = await walkWorkspace(root, this.config.maxStatusEntries)
+      listed = { paths: walked.paths, total: walked.total, truncated: walked.truncated }
+    }
+    const files = listed.paths.map(path => ({
       path,
       status: 'modified',
       index: ' ',
@@ -720,7 +781,15 @@ export class WorkspaceReview extends TypertRemoteService {
       removed: null,
     }))
     files.sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
-    return { isRepository, root, files, tree: buildTree(files), count: files.length, truncated: listed.truncated }
+    return {
+      isRepository,
+      root,
+      files,
+      tree: buildTree(files),
+      count: files.length,
+      total: listed.total,
+      truncated: listed.truncated,
+    }
   }
 
   /**

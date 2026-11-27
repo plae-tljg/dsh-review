@@ -123,6 +123,7 @@ const reviewFiles = z.object({
     files: z.array(reviewFile),
   }),
   count: z.number(),
+  total: z.number(),
   truncated: z.boolean(),
 })
 

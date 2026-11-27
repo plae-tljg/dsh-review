@@ -1158,7 +1158,9 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
         {/* The tree came from the directory itself rather than from Git, so the
             view says which source answered instead of claiming a repository. */}
         {!filesState.report.isRepository && <p className={css.hint} data-review-plain>{t('files.plain')}</p>}
-        {filesState.report.truncated && <p className={css.hint}>{t('truncated')}</p>}
+        {filesState.report.truncated && (
+          <p className={css.hint}>{t('files.truncated', { total: String(filesState.report.total) })}</p>
+        )}
         <div className={css.split} style={splitStyle}>
           <div className={css.list}>
             <FilterBox value={filter} onChange={setFilter} t={t} />
@@ -1187,7 +1189,11 @@ export function ReviewBody({ useTabInfo, useStore, actions, start, refresh, sele
                 onSelect={() => actions.selectFile(tab.id, file.path)}
               />
             ))}
-            <p className={css.count}>{t('files.count', { count: String(filesState.report.count) })}</p>
+            <p className={css.count}>
+              {filesState.report.truncated
+                ? t('files.countOf', { count: String(filesState.report.count), total: String(filesState.report.total) })
+                : t('files.count', { count: String(filesState.report.count) })}
+            </p>
           </div>
           <div className={css.divider} role="separator" aria-orientation="vertical" {...dividerProps} />
           <div className={css.body}>

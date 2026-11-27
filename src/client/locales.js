@@ -40,6 +40,8 @@ export const zh = {
   staged: '已暂存',
   unstaged: '未暂存',
   'files.count': '{count} 个文件',
+  'files.countOf': '{count} / {total} 个文件',
+  'files.truncated': '文件太多，只列出了一部分（这个工作区共有 {total} 个文件）。',
 
   'status.added': '新增',
   'status.modified': '修改',
@@ -125,6 +127,8 @@ export const en = {
   staged: 'Staged',
   unstaged: 'Unstaged',
   'files.count': '{count} files',
+  'files.countOf': '{count} / {total} files',
+  'files.truncated': 'Too many files, so only some are listed (this workspace holds {total} files).',
 
   'status.added': 'Added',
   'status.modified': 'Modified',
