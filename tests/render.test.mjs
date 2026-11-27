@@ -36,7 +36,7 @@ const profileRequire = createRequire(`${process.env.HOME}/.dsh/profiles/web/pack
  */
 const CHECKOUT_CANDIDATES = [
   process.env.DSH_CHECKOUT,
-  join(homedir(), '00lib', 'dsh-mother'),
+  join(homedir(), '00lib', 'dsh-harness'),
   join(homedir(), '00lib', 'deepseek-harness'),
   '/home/lkm/00app/03repo/deepseek-harness',
 ].filter(candidate => candidate !== undefined)

@@ -27,7 +27,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-checkout="${1:-${DSH_CHECKOUT:-/home/fit/00lib/dsh-mother}}"
+checkout="${1:-${DSH_CHECKOUT:-/home/fit/00lib/dsh-harness}}"
 
 # The harness line this plugin is built against. The packages are published
 # at the same version as the harness release they belong to.
